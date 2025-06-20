@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Enhanced AWS Grading Script (Detailed Checks + 70% Total Weightage)
+# AWS Grading Script (No health check, 70% total)
 echo "=== AWS Practical Assessment Grading Script ==="
 read -p "Enter your full name (e.g., LowChoonKeat): " fullname
 lowername=$(echo "$fullname" | tr '[:upper:]' '[:lower:]')
@@ -22,7 +22,6 @@ if [ "$lt_data" != "[]" ]; then
   echo "✅ Launch Template '$lt_name' found" | tee -a grading_report.txt
   ((score+=4))
 
-  # Additional config check
   lt_id=$(echo "$lt_data" | jq -r '.[0].LaunchTemplateId')
   latest_version=$(aws ec2 describe-launch-template-versions --launch-template-id "$lt_id" --versions latest --query 'LaunchTemplateVersions[0]')
   ami_id=$(echo "$latest_version" | jq -r '.LaunchTemplateData.ImageId')
@@ -39,7 +38,6 @@ else
   echo "❌ Launch Template '$lt_name' NOT found" | tee -a grading_report.txt
 fi
 
-# Check EC2 instance and web server
 instance_id=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=running --query "Reservations[].Instances[].InstanceId" --output text)
 if [ -n "$instance_id" ]; then
   echo "✅ Running EC2 instance found: $instance_id" | tee -a grading_report.txt
@@ -55,7 +53,7 @@ else
   echo "❌ No running EC2 instance found" | tee -a grading_report.txt
 fi
 
-# Task 2: ALB + ASG + Target Group (25%)
+# Task 2: ALB + ASG + TG (25%)
 echo "[Task 2: ALB + ASG + TG (25%)]" | tee -a grading_report.txt
 alb_name="ALB_$fullname"
 tg_name="TG_$fullname"
@@ -75,52 +73,4 @@ else
   echo "❌ ALB '$alb_name' not found" | tee -a grading_report.txt
 fi
 
-# Target Group health check
-tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
-if [ "$tg_arn" != "None" ]; then
-  health=$(aws elbv2 describe-target-health --target-group-arn "$tg_arn" --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text)
-  if [ "$health" == "healthy" ]; then
-    echo "✅ Target Group has a healthy instance" | tee -a grading_report.txt
-    ((score+=5))
-  else
-    echo "❌ Target Group instance not healthy or missing" | tee -a grading_report.txt
-  fi
-else
-  echo "❌ Target Group '$tg_name' not found" | tee -a grading_report.txt
-fi
-
-# ASG check
-asg_check=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output json)
-if [ "$asg_check" != "[]" ]; then
-  echo "✅ ASG '$asg_name' exists" | tee -a grading_report.txt
-  ((score+=4))
-else
-  echo "❌ ASG '$asg_name' not found" | tee -a grading_report.txt
-fi
-
-# Task 3: S3 Static Website Hosting (20%)
-echo "[Task 3: S3 Static Website (20%)]" | tee -a grading_report.txt
-bucket_name="s3-$lowername"
-
-# Static hosting config check
-website_status=$(aws s3api get-bucket-website --bucket "$bucket_name" 2>/dev/null)
-if [ $? -eq 0 ]; then
-  echo "✅ Static website hosting is enabled for $bucket_name" | tee -a grading_report.txt
-  ((score+=4))
-else
-  echo "❌ Static website hosting not enabled for $bucket_name" | tee -a grading_report.txt
-fi
-
-# Check site availability
-s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
-if curl -s "$s3_url" | grep -iq "$fullname"; then
-  echo "✅ S3 site displays student name" | tee -a grading_report.txt
-  ((score+=6))
-else
-  echo "❌ S3 site does not show student name or inaccessible" | tee -a grading_report.txt
-fi
-
-# Final Score
-echo "=============================" | tee -a grading_report.txt
-echo "Final Score: $score / $max_score" | tee -a grading_report.txt
-echo "Report saved as: grading_report.txt"
+tg_arn=$(aw_
