@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AWS Grading Script (Stricter AMI and instance type check, 70% total)
+# AWS Grading Script (Stricter validation)
 echo "=== AWS Practical Assessment Grading Script ==="
 read -p "Enter your full name (e.g., LowChoonKeat): " fullname
 lowername=$(echo "$fullname" | tr '[:upper:]' '[:lower:]')
@@ -27,7 +27,6 @@ if [ "$lt_data" != "[]" ]; then
   ami_id=$(echo "$latest_version" | jq -r '.LaunchTemplateData.ImageId')
   instance_type=$(echo "$latest_version" | jq -r '.LaunchTemplateData.InstanceType')
   user_data=$(echo "$latest_version" | jq -r '.LaunchTemplateData.UserData')
-
   image_name=$(aws ec2 describe-images --image-ids "$ami_id" --query 'Images[0].Name' --output text)
 
   if [[ "$image_name" == *"amzn2-ami"* && "$instance_type" == "t3.micro" && "$user_data" != "null" ]]; then
@@ -75,7 +74,6 @@ else
   echo "❌ ALB '$alb_name' not found" | tee -a grading_report.txt
 fi
 
-# Only check if target group exists (no health check)
 tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
 if [ "$tg_arn" != "None" ] && [ -n "$tg_arn" ]; then
   echo "✅ Target Group '$tg_name' exists" | tee -a grading_report.txt
@@ -84,10 +82,19 @@ else
   echo "❌ Target Group '$tg_name' not found" | tee -a grading_report.txt
 fi
 
-asg_check=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output json)
-if [ "$asg_check" != "[]" ]; then
+asg_data=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$asg_name" --output json)
+if echo "$asg_data" | jq -e '.AutoScalingGroups | length > 0' > /dev/null; then
   echo "✅ ASG '$asg_name' exists" | tee -a grading_report.txt
-  ((score+=4))
+  ((score+=2))
+  desired=$(echo "$asg_data" | jq -r '.AutoScalingGroups[0].DesiredCapacity')
+  min=$(echo "$asg_data" | jq -r '.AutoScalingGroups[0].MinSize')
+  max=$(echo "$asg_data" | jq -r '.AutoScalingGroups[0].MaxSize')
+  if [[ "$desired" -eq 1 && "$min" -eq 1 && "$max" -eq 3 ]]; then
+    echo "✅ ASG has correct Desired=1, Min=1, Max=3" | tee -a grading_report.txt
+    ((score+=2))
+  else
+    echo "❌ ASG scaling config incorrect (Expected: Desired=1, Min=1, Max=3)" | tee -a grading_report.txt
+  fi
 else
   echo "❌ ASG '$asg_name' not found" | tee -a grading_report.txt
 fi
@@ -103,15 +110,4 @@ else
   echo "❌ Static website hosting not enabled for $bucket_name" | tee -a grading_report.txt
 fi
 
-s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
-if curl -s "$s3_url" | grep -iq "$fullname"; then
-  echo "✅ S3 site displays student name" | tee -a grading_report.txt
-  ((score+=6))
-else
-  echo "❌ S3 site does not show student name or inaccessible" | tee -a grading_report.txt
-fi
-
-# Final Score
-echo "=============================" | tee -a grading_report.txt
-echo "Final Score: $score / $max_score" | tee -a grading_report.txt
-echo "Report saved as: grading_report.txt"
+s3_url="http://$bucket_name.s3-website-$region.amazonaws.co
