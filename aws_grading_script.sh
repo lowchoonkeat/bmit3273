@@ -73,4 +73,43 @@ else
   echo "❌ ALB '$alb_name' not found" | tee -a grading_report.txt
 fi
 
-tg_arn=$(aw_
+# Only check if target group exists (no health check)
+tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+if [ "$tg_arn" != "None" ] && [ -n "$tg_arn" ]; then
+  echo "✅ Target Group '$tg_name' exists" | tee -a grading_report.txt
+  ((score+=5))
+else
+  echo "❌ Target Group '$tg_name' not found" | tee -a grading_report.txt
+fi
+
+asg_check=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output json)
+if [ "$asg_check" != "[]" ]; then
+  echo "✅ ASG '$asg_name' exists" | tee -a grading_report.txt
+  ((score+=4))
+else
+  echo "❌ ASG '$asg_name' not found" | tee -a grading_report.txt
+fi
+
+# Task 3: S3 Static Website Hosting (20%)
+echo "[Task 3: S3 Static Website (20%)]" | tee -a grading_report.txt
+bucket_name="s3-$lowername"
+website_status=$(aws s3api get-bucket-website --bucket "$bucket_name" 2>/dev/null)
+if [ $? -eq 0 ]; then
+  echo "✅ Static website hosting is enabled for $bucket_name" | tee -a grading_report.txt
+  ((score+=4))
+else
+  echo "❌ Static website hosting not enabled for $bucket_name" | tee -a grading_report.txt
+fi
+
+s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
+if curl -s "$s3_url" | grep -iq "$fullname"; then
+  echo "✅ S3 site displays student name" | tee -a grading_report.txt
+  ((score+=6))
+else
+  echo "❌ S3 site does not show student name or inaccessible" | tee -a grading_report.txt
+fi
+
+# Final Score
+echo "=============================" | tee -a grading_report.txt
+echo "Final Score: $score / $max_score" | tee -a grading_report.txt
+echo "Report saved as: grading_report.txt"
