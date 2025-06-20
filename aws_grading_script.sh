@@ -60,10 +60,7 @@ alb_name="ALB_$fullname"
 tg_name="TG_$fullname"
 asg_name="ASG_$fullname"
 
-alb_dns=$(aws elbv2 describe-load-balancers \
-  --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" \
-  --output text)
-
+alb_dns=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" --output text)
 if [ -n "$alb_dns" ]; then
   echo "✅ ALB '$alb_name' DNS: $alb_dns" | tee -a grading_report.txt
   ((score+=6))
@@ -86,8 +83,7 @@ else
   echo "❌ Target Group '$tg_name' not found" | tee -a grading_report.txt
 fi
 
-asg_data=$(aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names "$asg_name" --output json)
+asg_data=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$asg_name" --output json)
 if echo "$asg_data" | jq -e '.AutoScalingGroups | length > 0' > /dev/null; then
   echo "✅ ASG '$asg_name' exists" | tee -a grading_report.txt
   ((score+=2))
