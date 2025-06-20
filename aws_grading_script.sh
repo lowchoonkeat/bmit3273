@@ -110,4 +110,15 @@ else
   echo "❌ Static website hosting not enabled for $bucket_name" | tee -a grading_report.txt
 fi
 
-s3_url="http://$bucket_name.s3-website-$region.amazonaws.co
+s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
+if curl -s "$s3_url" | grep -iq "$fullname"; then
+  echo "✅ S3 site displays student name" | tee -a grading_report.txt
+  ((score+=6))
+else
+  echo "❌ S3 site does not show student name or inaccessible" | tee -a grading_report.txt
+fi
+
+# Final Score
+echo "=============================" | tee -a grading_report.txt
+echo "Final Score: $score / $max_score" | tee -a grading_report.txt
+echo "Report saved as: grading_report.txt"
