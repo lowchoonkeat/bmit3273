@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AWS Grading Script (No health check, 70% total)
+# AWS Grading Script (Stricter AMI and instance type check, 70% total)
 echo "=== AWS Practical Assessment Grading Script ==="
 read -p "Enter your full name (e.g., LowChoonKeat): " fullname
 lowername=$(echo "$fullname" | tr '[:upper:]' '[:lower:]')
@@ -28,11 +28,13 @@ if [ "$lt_data" != "[]" ]; then
   instance_type=$(echo "$latest_version" | jq -r '.LaunchTemplateData.InstanceType')
   user_data=$(echo "$latest_version" | jq -r '.LaunchTemplateData.UserData')
 
-  if [[ "$ami_id" == *"ami"* && "$instance_type" != "null" && "$user_data" != "null" ]]; then
-    echo "✅ Launch Template has AMI, instance type, and user data configured" | tee -a grading_report.txt
+  image_name=$(aws ec2 describe-images --image-ids "$ami_id" --query 'Images[0].Name' --output text)
+
+  if [[ "$image_name" == *"amzn2-ami"* && "$instance_type" == "t3.micro" && "$user_data" != "null" ]]; then
+    echo "✅ Launch Template uses Amazon Linux 2, t3.micro, and includes user data" | tee -a grading_report.txt
     ((score+=4))
   else
-    echo "❌ Launch Template missing config (AMI, type, or user data)" | tee -a grading_report.txt
+    echo "❌ Launch Template does not meet all requirements (Amazon Linux 2, t3.micro, user data)" | tee -a grading_report.txt
   fi
 else
   echo "❌ Launch Template '$lt_name' NOT found" | tee -a grading_report.txt
