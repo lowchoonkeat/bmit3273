@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AWS Grading Script (Weighted: 70% total)
+# Enhanced AWS Grading Script (Detailed Checks + 70% Total Weightage)
 echo "=== AWS Practical Assessment Grading Script ==="
 read -p "Enter your full name (e.g., LowChoonKeat): " fullname
 lowername=$(echo "$fullname" | tr '[:upper:]' '[:lower:]')
@@ -16,22 +16,37 @@ echo "=============================" >> grading_report.txt
 
 # Task 1: EC2 and Launch Template (25%)
 echo "[Task 1: EC2 + Launch Template (25%)]" | tee -a grading_report.txt
-lt_check=$(aws ec2 describe-launch-templates --query "LaunchTemplates[?contains(LaunchTemplateName, 'LT_$fullname')]" --output text)
-if [ -n "$lt_check" ]; then
-  echo "✅ Launch Template found" | tee -a grading_report.txt
-  ((score+=8))
+lt_name="LT_$fullname"
+lt_data=$(aws ec2 describe-launch-templates --query "LaunchTemplates[?LaunchTemplateName=='$lt_name']" --output json)
+if [ "$lt_data" != "[]" ]; then
+  echo "✅ Launch Template '$lt_name' found" | tee -a grading_report.txt
+  ((score+=4))
+
+  # Additional config check
+  lt_id=$(echo "$lt_data" | jq -r '.[0].LaunchTemplateId')
+  latest_version=$(aws ec2 describe-launch-template-versions --launch-template-id "$lt_id" --versions latest --query 'LaunchTemplateVersions[0]')
+  ami_id=$(echo "$latest_version" | jq -r '.LaunchTemplateData.ImageId')
+  instance_type=$(echo "$latest_version" | jq -r '.LaunchTemplateData.InstanceType')
+  user_data=$(echo "$latest_version" | jq -r '.LaunchTemplateData.UserData')
+
+  if [[ "$ami_id" == *"ami"* && "$instance_type" != "null" && "$user_data" != "null" ]]; then
+    echo "✅ Launch Template has AMI, instance type, and user data configured" | tee -a grading_report.txt
+    ((score+=4))
+  else
+    echo "❌ Launch Template missing config (AMI, type, or user data)" | tee -a grading_report.txt
+  fi
 else
-  echo "❌ Launch Template NOT found" | tee -a grading_report.txt
+  echo "❌ Launch Template '$lt_name' NOT found" | tee -a grading_report.txt
 fi
 
+# Check EC2 instance and web server
 instance_id=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=running --query "Reservations[].Instances[].InstanceId" --output text)
 if [ -n "$instance_id" ]; then
   echo "✅ Running EC2 instance found: $instance_id" | tee -a grading_report.txt
   ((score+=8))
-
   public_ip=$(aws ec2 describe-instances --instance-ids $instance_id --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
   if curl -s "http://$public_ip" | grep -iq "$fullname"; then
-    echo "✅ Web page served with student name" | tee -a grading_report.txt
+    echo "✅ Web server running and displaying student name" | tee -a grading_report.txt
     ((score+=9))
   else
     echo "❌ Web page not showing student name" | tee -a grading_report.txt
@@ -40,50 +55,72 @@ else
   echo "❌ No running EC2 instance found" | tee -a grading_report.txt
 fi
 
-# Task 2: ALB and ASG (25%)
-echo "[Task 2: ALB + ASG (25%)]" | tee -a grading_report.txt
-alb_dns=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'alb')].DNSName" --output text)
+# Task 2: ALB + ASG + Target Group (25%)
+echo "[Task 2: ALB + ASG + TG (25%)]" | tee -a grading_report.txt
+alb_name="ALB_$fullname"
+tg_name="TG_$fullname"
+asg_name="ASG_$fullname"
+
+alb_dns=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" --output text)
 if [ -n "$alb_dns" ]; then
-  echo "✅ ALB DNS: $alb_dns" | tee -a grading_report.txt
-  ((score+=8))
+  echo "✅ ALB '$alb_name' DNS: $alb_dns" | tee -a grading_report.txt
+  ((score+=6))
   if curl -s "http://$alb_dns" | grep -iq "$fullname"; then
-    echo "✅ ALB serves content with student name" | tee -a grading_report.txt
-    ((score+=9))
+    echo "✅ ALB DNS shows page with student name" | tee -a grading_report.txt
+    ((score+=5))
   else
-    echo "❌ ALB DNS not showing student name in content" | tee -a grading_report.txt
+    echo "❌ ALB DNS does not show student name" | tee -a grading_report.txt
   fi
 else
-  echo "❌ ALB not found" | tee -a grading_report.txt
+  echo "❌ ALB '$alb_name' not found" | tee -a grading_report.txt
 fi
 
-asg_check=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?contains(AutoScalingGroupName, 'ASG_$fullname')].[MinSize,MaxSize,DesiredCapacity]" --output text)
-if [ -n "$asg_check" ]; then
-  echo "✅ ASG with correct naming exists" | tee -a grading_report.txt
-  ((score+=8))
+# Target Group health check
+tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+if [ "$tg_arn" != "None" ]; then
+  health=$(aws elbv2 describe-target-health --target-group-arn "$tg_arn" --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text)
+  if [ "$health" == "healthy" ]; then
+    echo "✅ Target Group has a healthy instance" | tee -a grading_report.txt
+    ((score+=5))
+  else
+    echo "❌ Target Group instance not healthy or missing" | tee -a grading_report.txt
+  fi
 else
-  echo "❌ ASG not found or not named properly" | tee -a grading_report.txt
+  echo "❌ Target Group '$tg_name' not found" | tee -a grading_report.txt
 fi
 
-# Task 3: S3 Website Hosting (20%)
+# ASG check
+asg_check=$(aws autoscaling describe-auto-scaling-groups --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output json)
+if [ "$asg_check" != "[]" ]; then
+  echo "✅ ASG '$asg_name' exists" | tee -a grading_report.txt
+  ((score+=4))
+else
+  echo "❌ ASG '$asg_name' not found" | tee -a grading_report.txt
+fi
+
+# Task 3: S3 Static Website Hosting (20%)
 echo "[Task 3: S3 Static Website (20%)]" | tee -a grading_report.txt
 bucket_name="s3-$lowername"
-s3_check=$(aws s3api head-bucket --bucket $bucket_name 2>&1)
-if [[ $s3_check == *"Not Found"* || $s3_check == *"Forbidden"* ]]; then
-  echo "❌ S3 bucket $bucket_name not found or inaccessible" | tee -a grading_report.txt
-else
-  echo "✅ S3 bucket $bucket_name found" | tee -a grading_report.txt
-  ((score+=8))
 
-  s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
-  if curl -s "$s3_url" | grep -iq "$fullname"; then
-    echo "✅ S3 site displays student name" | tee -a grading_report.txt
-    ((score+=6))
-  else
-    echo "❌ S3 site does not display student name" | tee -a grading_report.txt
-  fi
+# Static hosting config check
+website_status=$(aws s3api get-bucket-website --bucket "$bucket_name" 2>/dev/null)
+if [ $? -eq 0 ]; then
+  echo "✅ Static website hosting is enabled for $bucket_name" | tee -a grading_report.txt
+  ((score+=4))
+else
+  echo "❌ Static website hosting not enabled for $bucket_name" | tee -a grading_report.txt
 fi
 
-# Final score
+# Check site availability
+s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
+if curl -s "$s3_url" | grep -iq "$fullname"; then
+  echo "✅ S3 site displays student name" | tee -a grading_report.txt
+  ((score+=6))
+else
+  echo "❌ S3 site does not show student name or inaccessible" | tee -a grading_report.txt
+fi
+
+# Final Score
 echo "=============================" | tee -a grading_report.txt
 echo "Final Score: $score / $max_score" | tee -a grading_report.txt
 echo "Report saved as: grading_report.txt"
