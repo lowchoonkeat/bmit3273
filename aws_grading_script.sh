@@ -114,7 +114,7 @@ if [ -z "$bucket_name" ]; then
   echo "❌ No S3 bucket found with prefix 's3-$lowername'" | tee -a grading_report.txt
 else
   echo "✅ S3 bucket '$bucket_name' found" | tee -a grading_report.txt
-  ((score+=4))  # Bucket created
+  ((score+=4))
 
   website_status=$(aws s3api get-bucket-website --bucket "$bucket_name" 2>/dev/null)
   if [ $? -eq 0 ]; then
