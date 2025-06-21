@@ -103,7 +103,7 @@ else
 fi
 
 #############################################
-# Task 3: s3 static website (20%)
+# Task 3: S3 Static Website (20%)
 #############################################
 echo
 echo "[Task 3: s3 static website (20%)]"
@@ -144,7 +144,7 @@ if [ -n "$bucket_name" ]; then
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$bp_check" ]; then
     echo "✅ bucket policy configured"
-    total_score=$((total_score + 2))
+    total_score=$((total_score + 1))
   else
     echo "❌ no bucket policy found"
   fi
@@ -152,7 +152,7 @@ if [ -n "$bucket_name" ]; then
   pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
   if [ "$pab_status" = "true" ]; then
     echo "✅ public access block disabled"
-    total_score=$((total_score + 2))
+    total_score=$((total_score + 1))
   else
     echo "❌ public access block still enabled"
   fi
