@@ -56,7 +56,11 @@ else
   echo "❌ Launch Template '$lt_name' NOT found"
 fi
 
-instance_id=$(aws ec2 describe-instances --region "$REGION" --query "Reservations[].Instances[?State.Name=='running'].[InstanceId,Tags]" --output text | grep -i "$lower_name" | awk '{print $1}' | head -n 1)
+# Match EC2 instance by Launch Template name
+instance_id=$(aws ec2 describe-instances \
+  --region "$REGION" \
+  --query "Reservations[].Instances[?State.Name=='running' && LaunchTemplate.LaunchTemplateName=='$lt_name'].InstanceId" \
+  --output text | head -n 1)
 
 if [ -n "$instance_id" ]; then
   echo "✅ Running EC2 instance found: $instance_id"
@@ -70,7 +74,7 @@ if [ -n "$instance_id" ]; then
     echo "❌ Web page not showing student name"
   fi
 else
-  echo "❌ No EC2 instance running with your name"
+  echo "❌ No EC2 instance found running from your Launch Template"
 fi
 
 #############################################
@@ -79,14 +83,12 @@ fi
 echo
 echo "[Task 2: ALB + ASG + TG (25%)]"
 
-alb_list=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[].{Name:LoadBalancerName, Arn:LoadBalancerArn, DNS:DNSName}" --output json)
-alb_arn=$(echo "$alb_list" | jq -r ".[] | select(.Name==\"$alb_name\") | .Arn")
-alb_dns=$(echo "$alb_list" | jq -r ".[] | select(.Name==\"$alb_name\") | .DNS")
-
+alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \`$alb_name\`)].LoadBalancerArn" --output text)
 if [ -n "$alb_arn" ]; then
   echo "✅ ALB '$alb_name' exists"
   total_score=$((total_score + 5))
 
+  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \`$alb_name\`)].DNSName" --output text)
   if curl -s "http://$alb_dns" | grep -iq "$lower_name"; then
     echo "✅ ALB DNS shows student name"
     total_score=$((total_score + 5))
@@ -97,9 +99,7 @@ else
   echo "❌ ALB '$alb_name' not found"
 fi
 
-tg_list=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[].{Name:TargetGroupName}" --output json)
-tg_check=$(echo "$tg_list" | jq -r ".[] | select(.Name==\"$tg_name\") | .Name")
-
+tg_check=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[?contains(TargetGroupName, \`$tg_name\`)]" --output text)
 if [ -n "$tg_check" ]; then
   echo "✅ Target Group '$tg_name' exists"
   total_score=$((total_score + 5))
@@ -154,7 +154,7 @@ if [ -n "$bucket_name" ]; then
   website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
   if curl -s "$website_url" | grep -iq "$lower_name"; then
     echo "✅ S3 page shows student name"
-    total_score=$((total_score + 5))
+    total_score=$((total_score + 3))
   elif curl -s "$website_url" > /dev/null; then
     echo "✅ S3 site accessible"
     total_score=$((total_score + 3))
@@ -163,8 +163,6 @@ if [ -n "$bucket_name" ]; then
   fi
 
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
-  pab_check=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic' 2>/dev/null)
-
   if [ -n "$bp_check" ]; then
     echo "✅ Bucket policy configured"
     total_score=$((total_score + 2))
@@ -172,7 +170,8 @@ if [ -n "$bucket_name" ]; then
     echo "❌ No bucket policy found"
   fi
 
-  if [ "$pab_check" == "true" ]; then
+  pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
+  if [[ "$pab_status" == "true" ]]; then
     echo "✅ Public access block disabled"
     total_score=$((total_score + 2))
   else
