@@ -79,12 +79,14 @@ fi
 echo
 echo "[Task 2: ALB + ASG + TG (25%)]"
 
-alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \\`$alb_name\\`)].LoadBalancerArn" --output text)
+alb_list=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[].{Name:LoadBalancerName, Arn:LoadBalancerArn, DNS:DNSName}" --output json)
+alb_arn=$(echo "$alb_list" | jq -r ".[] | select(.Name==\"$alb_name\") | .Arn")
+alb_dns=$(echo "$alb_list" | jq -r ".[] | select(.Name==\"$alb_name\") | .DNS")
+
 if [ -n "$alb_arn" ]; then
   echo "✅ ALB '$alb_name' exists"
   total_score=$((total_score + 5))
 
-  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \\`$alb_name\\`)].DNSName" --output text)
   if curl -s "http://$alb_dns" | grep -iq "$lower_name"; then
     echo "✅ ALB DNS shows student name"
     total_score=$((total_score + 5))
@@ -95,7 +97,9 @@ else
   echo "❌ ALB '$alb_name' not found"
 fi
 
-tg_check=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[?contains(TargetGroupName, \\`$tg_name\\`)]" --output text)
+tg_list=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[].{Name:TargetGroupName}" --output json)
+tg_check=$(echo "$tg_list" | jq -r ".[] | select(.Name==\"$tg_name\") | .Name")
+
 if [ -n "$tg_check" ]; then
   echo "✅ Target Group '$tg_name' exists"
   total_score=$((total_score + 5))
@@ -153,17 +157,26 @@ if [ -n "$bucket_name" ]; then
     total_score=$((total_score + 5))
   elif curl -s "$website_url" > /dev/null; then
     echo "✅ S3 site accessible"
-    total_score=$((total_score + 5))
+    total_score=$((total_score + 3))
   else
     echo "❌ S3 site not accessible"
   fi
 
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
+  pab_check=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic' 2>/dev/null)
+
   if [ -n "$bp_check" ]; then
     echo "✅ Bucket policy configured"
-    total_score=$((total_score + 5))
+    total_score=$((total_score + 2))
   else
     echo "❌ No bucket policy found"
+  fi
+
+  if [ "$pab_check" == "true" ]; then
+    echo "✅ Public access block disabled"
+    total_score=$((total_score + 2))
+  else
+    echo "❌ Public access block still enabled"
   fi
 else
   echo "❌ S3 bucket not found"
