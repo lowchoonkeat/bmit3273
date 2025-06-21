@@ -56,25 +56,6 @@ else
   echo "❌ Launch Template '$lt_name' NOT found"
 fi
 
-instance_id=$(aws ec2 describe-instances --region "$REGION" \
-  --query "Reservations[].Instances[?State.Name=='running'].[InstanceId,LaunchTemplate.LaunchTemplateName]" \
-  --output text | grep "$lt_name" | awk '{print $1}' | head -n 1)
-
-if [ -n "$instance_id" ]; then
-  echo "✅ Running EC2 instance found from your Launch Template: $instance_id"
-  total_score=$((total_score + 5))
-
-  ip=$(aws ec2 describe-instances --instance-ids "$instance_id" --region "$REGION" --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
-  if curl -s "http://$ip" | grep -iq "$lower_name"; then
-    echo "✅ Web page shows student name"
-    total_score=$((total_score + 5))
-  else
-    echo "❌ Web page not showing student name"
-  fi
-else
-  echo "❌ No EC2 instance found running from your Launch Template"
-fi
-
 #############################################
 # Task 2: ALB + ASG + TG (25%)
 #############################################
@@ -122,23 +103,23 @@ else
 fi
 
 #############################################
-# Task 3: S3 Static Website (20%)
+# Task 3: s3 static website (20%)
 #############################################
 echo
-echo "[Task 3: S3 Static Website (20%)]"
+echo "[Task 3: s3 static website (20%)]"
 
 bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | grep "$bucket_name_prefix" | head -n 1)
 
 if [ -n "$bucket_name" ]; then
-  echo "✅ S3 bucket '$bucket_name' found"
+  echo "✅ s3 bucket '$bucket_name' found"
   total_score=$((total_score + 2))
 
   website_config=$(aws s3api get-bucket-website --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$website_config" ]; then
-    echo "✅ Static website hosting enabled"
+    echo "✅ static website hosting enabled"
     total_score=$((total_score + 4))
   else
-    echo "❌ Static website hosting not enabled"
+    echo "❌ static website hosting not enabled"
   fi
 
   index_found=$(aws s3api list-objects --bucket "$bucket_name" --region "$REGION" --query "Contents[].Key" --output text | grep -i index)
@@ -151,32 +132,32 @@ if [ -n "$bucket_name" ]; then
 
   website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
   if curl -s "$website_url" | grep -iq "$lower_name"; then
-    echo "✅ S3 page shows student name"
+    echo "✅ s3 page shows student name"
     total_score=$((total_score + 3))
   elif curl -s "$website_url" > /dev/null; then
-    echo "✅ S3 site accessible"
+    echo "✅ s3 site accessible"
     total_score=$((total_score + 3))
   else
-    echo "❌ S3 site not accessible"
+    echo "❌ s3 site not accessible"
   fi
 
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$bp_check" ]; then
-    echo "✅ Bucket policy configured"
+    echo "✅ bucket policy configured"
     total_score=$((total_score + 2))
   else
-    echo "❌ No bucket policy found"
+    echo "❌ no bucket policy found"
   fi
 
   pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
   if [ "$pab_status" = "true" ]; then
-    echo "✅ Public access block disabled"
-    total_score=$((total_score + 1))
+    echo "✅ public access block disabled"
+    total_score=$((total_score + 2))
   else
-    echo "❌ Public access block still enabled"
+    echo "❌ public access block still enabled"
   fi
 else
-  echo "❌ S3 bucket not found"
+  echo "❌ s3 bucket not found"
 fi
 
 #############################################
