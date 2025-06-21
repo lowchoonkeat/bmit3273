@@ -108,38 +108,59 @@ fi
 
 # Task 3: S3 Static Website (20%)
 echo "[Task 3: S3 Static Website (20%)]" | tee -a grading_report.txt
+task3_score=0
 bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | grep "^s3-$lowername" | head -n1)
 
 if [ -z "$bucket_name" ]; then
   echo "❌ No S3 bucket found with prefix 's3-$lowername'" | tee -a grading_report.txt
 else
   echo "✅ S3 bucket '$bucket_name' found" | tee -a grading_report.txt
-  ((score+=4))
+  ((task3_score+=3))
 
-  website_status=$(aws s3api get-bucket-website --bucket "$bucket_name" 2>/dev/null)
-  if [ $? -eq 0 ]; then
-    echo "✅ Static website hosting enabled for $bucket_name" | tee -a grading_report.txt
-    ((score+=6))
+  # Check website hosting
+  if aws s3api get-bucket-website --bucket "$bucket_name" 2>/dev/null; then
+    echo "✅ Static website hosting enabled" | tee -a grading_report.txt
+    ((task3_score+=4))
   else
-    echo "❌ Static website hosting not enabled for $bucket_name" | tee -a grading_report.txt
+    echo "❌ Static website hosting not enabled" | tee -a grading_report.txt
   fi
 
+  # Check index.html
   has_index=$(aws s3api list-objects --bucket "$bucket_name" --query "Contents[].Key" --output text | grep -i "index.html")
   if [ -n "$has_index" ]; then
-    echo "✅ index.html is uploaded to S3 bucket" | tee -a grading_report.txt
-    ((score+=3))
+    echo "✅ index.html is uploaded" | tee -a grading_report.txt
+    ((task3_score+=3))
   else
-    echo "❌ index.html not found in S3 bucket" | tee -a grading_report.txt
+    echo "❌ index.html not found" | tee -a grading_report.txt
   fi
 
+  # Check public access config
+  public_block=$(aws s3api get-bucket-public-access-block --bucket "$bucket_name" 2>/dev/null)
+  if echo "$public_block" | grep -q false; then
+    echo "✅ Block Public Access is disabled" | tee -a grading_report.txt
+    ((task3_score+=2))
+  else
+    echo "❌ Block Public Access still enabled" | tee -a grading_report.txt
+  fi
+
+  # Check bucket policy
+  bucket_policy=$(aws s3api get-bucket-policy --bucket "$bucket_name" 2>/dev/null)
+  if [ -n "$bucket_policy" ]; then
+    echo "✅ Bucket policy is configured" | tee -a grading_report.txt
+    ((task3_score+=1))
+  else
+    echo "❌ No bucket policy configured" | tee -a grading_report.txt
+  fi
+
+  # Check website content
   s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
   s3_content=$(curl -s "$s3_url")
   if [ -n "$s3_content" ]; then
     echo "✅ S3 site is accessible" | tee -a grading_report.txt
-    ((score+=3))
+    ((task3_score+=3))
     if echo "$s3_content" | grep -iq "$fullname"; then
       echo "✅ S3 site displays student name" | tee -a grading_report.txt
-      ((score+=4))
+      ((task3_score+=4))
     else
       echo "❌ S3 page does not contain student name" | tee -a grading_report.txt
     fi
@@ -147,6 +168,12 @@ else
     echo "❌ S3 site not accessible" | tee -a grading_report.txt
   fi
 fi
+
+# Cap Task 3 score at 20
+if [ $task3_score -gt 20 ]; then
+  task3_score=20
+fi
+score=$((score + task3_score))
 
 # Final Score
 echo "=============================" | tee -a grading_report.txt
