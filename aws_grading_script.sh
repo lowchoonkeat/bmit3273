@@ -20,18 +20,27 @@ lt_data=$(aws ec2 describe-launch-templates --query "LaunchTemplates[?LaunchTemp
 
 if [ "$lt_data" != "[]" ]; then
   echo "✅ Launch Template '$lt_name' found" | tee -a grading_report.txt
-  ((score+=4))
+  ((score+=4))  # LT name correct
+
   lt_id=$(echo "$lt_data" | jq -r '.[0].LaunchTemplateId')
   all_versions=$(aws ec2 describe-launch-template-versions --launch-template-id "$lt_id")
   latest_version=$(echo "$all_versions" | jq '.LaunchTemplateVersions | sort_by(.VersionNumber) | last')
+  
   instance_type=$(echo "$latest_version" | jq -r '.LaunchTemplateData.InstanceType')
   user_data=$(echo "$latest_version" | jq -r '.LaunchTemplateData.UserData')
 
-  if [[ "$instance_type" == "t3.micro" && "$user_data" != "null" ]]; then
-    echo "✅ Launch Template uses t3.micro and includes user data" | tee -a grading_report.txt
+  if [[ "$instance_type" == "t3.micro" ]]; then
+    echo "✅ Launch Template uses t3.micro" | tee -a grading_report.txt
     ((score+=4))
   else
-    echo "❌ Launch Template does not meet t3.micro or user data requirement" | tee -a grading_report.txt
+    echo "❌ Launch Template does not use t3.micro" | tee -a grading_report.txt
+  fi
+
+  if [[ "$user_data" != "null" ]]; then
+    echo "✅ Launch Template includes user data" | tee -a grading_report.txt
+    ((score+=4))
+  else
+    echo "❌ Launch Template missing user data" | tee -a grading_report.txt
   fi
 else
   echo "❌ Launch Template '$lt_name' NOT found" | tee -a grading_report.txt
@@ -44,7 +53,7 @@ if [ -n "$instance_id" ]; then
   public_ip=$(aws ec2 describe-instances --instance-ids $instance_id --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
   if curl -s "http://$public_ip" | grep -iq "$fullname"; then
     echo "✅ Web server running and displaying student name" | tee -a grading_report.txt
-    ((score+=9))
+    ((score+=5))
   else
     echo "❌ Web page not showing student name" | tee -a grading_report.txt
   fi
