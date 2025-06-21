@@ -112,12 +112,12 @@ bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr
 
 if [ -n "$bucket_name" ]; then
   echo "✅ s3 bucket '$bucket_name' found"
-  total_score=$((total_score + 2))
+  total_score=$((total_score + 3))
 
   website_config=$(aws s3api get-bucket-website --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$website_config" ]; then
     echo "✅ static website hosting enabled"
-    total_score=$((total_score + 6))
+    total_score=$((total_score + 7))
   else
     echo "❌ static website hosting not enabled"
   fi
@@ -125,7 +125,7 @@ if [ -n "$bucket_name" ]; then
   index_found=$(aws s3api list-objects --bucket "$bucket_name" --region "$REGION" --query "Contents[].Key" --output text | grep -i index)
   if [ -n "$index_found" ]; then
     echo "✅ index.html uploaded"
-    total_score=$((total_score + 6))
+    total_score=$((total_score + 7))
   else
     echo "❌ index.html not found"
   fi
@@ -133,10 +133,10 @@ if [ -n "$bucket_name" ]; then
   website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
   if curl -s "$website_url" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
     echo "✅ s3 page shows student name"
-    total_score=$((total_score + 4))
+    total_score=$((total_score + 5))
   elif curl -s "$website_url" > /dev/null; then
     echo "✅ s3 site accessible"
-    total_score=$((total_score + 4))
+    total_score=$((total_score + 5))
   else
     echo "❌ s3 site not accessible"
   fi
@@ -152,7 +152,7 @@ if [ -n "$bucket_name" ]; then
   pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
   if [ "$pab_status" = "true" ]; then
     echo "✅ public access block disabled"
-    total_score=$((total_score + 3))
+    total_score=$((total_score + 4))
   else
     echo "❌ public access block still enabled"
   fi
