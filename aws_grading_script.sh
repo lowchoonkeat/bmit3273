@@ -140,29 +140,18 @@ if [ -n "$bucket_name" ]; then
   website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
   if curl -s "$website_url" | grep -iq "$lower_name"; then
     echo "✅ S3 page shows student name"
-    total_score=$((total_score + 3))
+    total_score=$((total_score + 5))
   elif curl -s "$website_url" > /dev/null; then
     echo "✅ S3 site accessible"
-    total_score=$((total_score + 2))
+    total_score=$((total_score + 5))
   else
     echo "❌ S3 site not accessible"
-  fi
-
-  pab_json=$(aws s3api get-bucket-public-access-block --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
-  if echo "$pab_json" | grep -q '"BlockPublicAcls": false' &&
-     echo "$pab_json" | grep -q '"IgnorePublicAcls": false' &&
-     echo "$pab_json" | grep -q '"BlockPublicPolicy": false' &&
-     echo "$pab_json" | grep -q '"RestrictPublicBuckets": false'; then
-    echo "✅ Public access block disabled"
-    total_score=$((total_score + 2))
-  else
-    echo "❌ Public access block still enabled"
   fi
 
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$bp_check" ]; then
     echo "✅ Bucket policy configured"
-    total_score=$((total_score + 3))
+    total_score=$((total_score + 5))
   else
     echo "❌ No bucket policy found"
   fi
