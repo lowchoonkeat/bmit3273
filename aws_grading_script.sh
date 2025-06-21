@@ -22,10 +22,8 @@ if [ "$lt_data" != "[]" ]; then
   echo "✅ Launch Template '$lt_name' found" | tee -a grading_report.txt
   ((score+=4))
   lt_id=$(echo "$lt_data" | jq -r '.[0].LaunchTemplateId')
-  latest_version=$(aws ec2 describe-launch-template-versions \
-    --launch-template-id "$lt_id" \
-    --query 'LaunchTemplateVersions | sort_by(@, &VersionNumber)[-1]' \
-    --output json)
+  all_versions=$(aws ec2 describe-launch-template-versions --launch-template-id "$lt_id")
+  latest_version=$(echo "$all_versions" | jq '.LaunchTemplateVersions | sort_by(.VersionNumber) | last')
   instance_type=$(echo "$latest_version" | jq -r '.LaunchTemplateData.InstanceType')
   user_data=$(echo "$latest_version" | jq -r '.LaunchTemplateData.UserData')
 
