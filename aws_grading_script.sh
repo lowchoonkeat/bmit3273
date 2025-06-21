@@ -23,7 +23,7 @@ lt_check=$(aws ec2 describe-launch-templates --region "$REGION" --query "LaunchT
 
 if [ -n "$lt_check" ]; then
   echo "✅ Launch Template '$lt_name' found"
-  total_score=$((total_score + 4))
+  total_score=$((total_score + 5))
 
   version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions '$Latest' --region "$REGION" 2>/dev/null)
   instance_type=$(echo "$version_data" | grep -o '"InstanceType": "[^"]*' | cut -d'"' -f4)
@@ -31,14 +31,14 @@ if [ -n "$lt_check" ]; then
 
   if [ "$instance_type" == "t3.micro" ]; then
     echo "✅ Launch Template uses t3.micro"
-    total_score=$((total_score + 4))
+    total_score=$((total_score + 5))
   else
     echo "❌ Launch Template is not t3.micro"
   fi
 
   if [ -n "$user_data" ]; then
     echo "✅ Launch Template includes user data"
-    total_score=$((total_score + 4))
+    total_score=$((total_score + 5))
   else
     echo "❌ Launch Template missing user data"
   fi
@@ -50,12 +50,12 @@ instance_id=$(aws ec2 describe-instances --region "$REGION" --query "Reservation
 
 if [ -n "$instance_id" ]; then
   echo "✅ Running EC2 instance found: $instance_id"
-  total_score=$((total_score + 7))
+  total_score=$((total_score + 5))
 
   ip=$(aws ec2 describe-instances --instance-ids "$instance_id" --region "$REGION" --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
   if curl -s "http://$ip" | grep -iq "$lower_name"; then
     echo "✅ Web page shows student name"
-    total_score=$((total_score + 6))
+    total_score=$((total_score + 5))
   else
     echo "❌ Web page not showing student name"
   fi
@@ -72,7 +72,7 @@ echo "[Task 2: ALB + ASG + TG (25%)]"
 alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \`$alb_name\`)].LoadBalancerArn" --output text)
 if [ -n "$alb_arn" ]; then
   echo "✅ ALB '$alb_name' exists"
-  total_score=$((total_score + 6))
+  total_score=$((total_score + 5))
 
   alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerArn=='$alb_arn'].DNSName" --output text)
   if curl -s "http://$alb_dns" | grep -iq "$lower_name"; then
@@ -96,7 +96,7 @@ fi
 asg_check=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output text)
 if [ -n "$asg_check" ]; then
   echo "✅ ASG '$asg_name' exists"
-  total_score=$((total_score + 4))
+  total_score=$((total_score + 5))
 
   config=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --auto-scaling-group-names "$asg_name" --query "AutoScalingGroups[0].[MinSize,MaxSize,DesiredCapacity]" --output text)
   if echo "$config" | grep -q -E "^1\s+3\s+1"; then
@@ -119,7 +119,7 @@ bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr
 
 if [ -n "$bucket_name" ]; then
   echo "✅ S3 bucket '$bucket_name' found"
-  total_score=$((total_score + 3))
+  total_score=$((total_score + 2))
 
   website_config=$(aws s3api get-bucket-website --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$website_config" ]; then
@@ -143,7 +143,7 @@ if [ -n "$bucket_name" ]; then
     total_score=$((total_score + 3))
   elif curl -s "$website_url" > /dev/null; then
     echo "✅ S3 site accessible"
-    total_score=$((total_score + 3))
+    total_score=$((total_score + 2))
   else
     echo "❌ S3 site not accessible"
   fi
@@ -159,7 +159,7 @@ if [ -n "$bucket_name" ]; then
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$bp_check" ]; then
     echo "✅ Bucket policy configured"
-    total_score=$((total_score + 2))
+    total_score=$((total_score + 3))
   else
     echo "❌ No bucket policy found"
   fi
