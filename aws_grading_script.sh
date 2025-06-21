@@ -25,7 +25,7 @@ if [ -n "$lt_check" ]; then
   echo "✅ Launch Template '$lt_name' found"
   total_score=$((total_score + 5))
 
-  version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions '$Latest' --region "$REGION" 2>/dev/null)
+  version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions \"$Latest\" --region "$REGION" 2>/dev/null)
   instance_type=$(echo "$version_data" | grep -o '"InstanceType": "[^"]*' | cut -d'"' -f4)
   user_data=$(echo "$version_data" | grep -o '"UserData": "[^"]*' | cut -d'"' -f4)
 
@@ -74,7 +74,7 @@ if [ -n "$alb_arn" ]; then
   echo "✅ ALB '$alb_name' exists"
   total_score=$((total_score + 5))
 
-  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerArn=='$alb_arn'].DNSName" --output text)
+  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \`$alb_name\`)].DNSName" --output text)
   if curl -s "http://$alb_dns" | grep -iq "$lower_name"; then
     echo "✅ ALB DNS shows student name"
     total_score=$((total_score + 5))
@@ -166,5 +166,4 @@ echo
 echo "============================="
 echo "Final Score: $total_score / 70"
 echo "Report saved as: grading_report.txt"
-
 echo "Final Score: $total_score / 70" > grading_report.txt
