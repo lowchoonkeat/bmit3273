@@ -124,14 +124,22 @@ else
     echo "❌ Static website hosting not enabled for $bucket_name" | tee -a grading_report.txt
   fi
 
+  has_index=$(aws s3api list-objects --bucket "$bucket_name" --query "Contents[].Key" --output text | grep -i "index.html")
+  if [ -n "$has_index" ]; then
+    echo "✅ index.html is uploaded to S3 bucket" | tee -a grading_report.txt
+    ((score+=3))
+  else
+    echo "❌ index.html not found in S3 bucket" | tee -a grading_report.txt
+  fi
+
   s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
   s3_content=$(curl -s "$s3_url")
   if [ -n "$s3_content" ]; then
     echo "✅ S3 site is accessible" | tee -a grading_report.txt
-    ((score+=5))
+    ((score+=3))
     if echo "$s3_content" | grep -iq "$fullname"; then
       echo "✅ S3 site displays student name" | tee -a grading_report.txt
-      ((score+=5))
+      ((score+=4))
     else
       echo "❌ S3 page does not contain student name" | tee -a grading_report.txt
     fi
