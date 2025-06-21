@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AWS Practical Assessment Grading Script
+# AWS Practical Assessment Grading Script (Hyphen Naming Convention)
 echo "=== AWS Practical Assessment Grading Script ==="
 read -p "Enter your full name (e.g., LowChoonKeat): " fullname
 lowername=$(echo "$fullname" | tr '[:upper:]' '[:lower:]')
@@ -16,7 +16,7 @@ echo "=============================" >> grading_report.txt
 
 # Task 1: EC2 + Launch Template (25%)
 echo "[Task 1: EC2 + Launch Template (25%)]" | tee -a grading_report.txt
-lt_name="LT_$fullname"
+lt_name="lt-$lowername"
 lt_data=$(aws ec2 describe-launch-templates --query "LaunchTemplates[?LaunchTemplateName=='$lt_name']" --output json)
 
 if [ "$lt_data" != "[]" ]; then
@@ -54,11 +54,11 @@ else
   echo "❌ No running EC2 instance found" | tee -a grading_report.txt
 fi
 
-# Task 2: ALB + ASG + Target Group (25%)
+# Task 2: ALB + ASG + TG (25%)
 echo "[Task 2: ALB + ASG + TG (25%)]" | tee -a grading_report.txt
-alb_name="ALB_$fullname"
-tg_name="TG_$fullname"
-asg_name="ASG_$fullname"
+alb_name="alb-$lowername"
+tg_name="tg-$lowername"
+asg_name="asg-$lowername"
 
 alb_dns=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" --output text)
 if [ -n "$alb_dns" ]; then
@@ -74,8 +74,7 @@ else
   echo "❌ ALB '$alb_name' not found" | tee -a grading_report.txt
 fi
 
-tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" \
-  --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
 if [ "$tg_arn" != "None" ] && [ -n "$tg_arn" ]; then
   echo "✅ Target Group '$tg_name' exists" | tee -a grading_report.txt
   ((score+=5))
