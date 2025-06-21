@@ -148,8 +148,11 @@ if [ -n "$bucket_name" ]; then
     echo "❌ S3 site not accessible"
   fi
 
-  pab_check=$(aws s3api get-bucket-public-access-block --bucket "$bucket_name" --region "$REGION" 2>/dev/null | grep false)
-  if [ -n "$pab_check" ]; then
+  pab_json=$(aws s3api get-bucket-public-access-block --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
+  if echo "$pab_json" | grep -q '"BlockPublicAcls": false' &&
+     echo "$pab_json" | grep -q '"IgnorePublicAcls": false' &&
+     echo "$pab_json" | grep -q '"BlockPublicPolicy": false' &&
+     echo "$pab_json" | grep -q '"RestrictPublicBuckets": false'; then
     echo "✅ Public access block disabled"
     total_score=$((total_score + 2))
   else
