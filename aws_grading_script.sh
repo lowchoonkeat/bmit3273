@@ -68,7 +68,7 @@ if [ -n "$alb_arn" ]; then
   total_score=$((total_score + 5))
 
   alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" --output text)
-  if curl -s "http://$alb_dns" | grep -iq "$lower_name"; then
+  if curl -s "http://$alb_dns" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
     echo "✅ ALB DNS shows student name"
     total_score=$((total_score + 5))
   else
@@ -131,7 +131,7 @@ if [ -n "$bucket_name" ]; then
   fi
 
   website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
-  if curl -s "$website_url" | grep -iq "$lower_name"; then
+  if curl -s "$website_url" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
     echo "✅ s3 page shows student name"
     total_score=$((total_score + 3))
   elif curl -s "$website_url" > /dev/null; then
