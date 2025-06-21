@@ -125,11 +125,18 @@ else
   fi
 
   s3_url="http://$bucket_name.s3-website-$region.amazonaws.com"
-  if curl -s "$s3_url" | grep -iq "$fullname"; then
-    echo "✅ S3 site displays student name" | tee -a grading_report.txt
-    ((score+=10))
+  s3_content=$(curl -s "$s3_url")
+  if [ -n "$s3_content" ]; then
+    echo "✅ S3 site is accessible" | tee -a grading_report.txt
+    ((score+=5))
+    if echo "$s3_content" | grep -iq "$fullname"; then
+      echo "✅ S3 site displays student name" | tee -a grading_report.txt
+      ((score+=5))
+    else
+      echo "❌ S3 page does not contain student name" | tee -a grading_report.txt
+    fi
   else
-    echo "❌ S3 site does not show student name or inaccessible" | tee -a grading_report.txt
+    echo "❌ S3 site not accessible" | tee -a grading_report.txt
   fi
 fi
 
