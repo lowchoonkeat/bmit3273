@@ -25,19 +25,28 @@ if [ -n "$lt_check" ]; then
   echo "✅ Launch Template '$lt_name' found"
   total_score=$((total_score + 5))
 
-  version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions \$Latest --region "$REGION" 2>/dev/null)
+  latest_version=$(aws ec2 describe-launch-templates \
+      --region "$REGION" \
+      --launch-template-names "$lt_name" \
+      --query 'LaunchTemplates[0].LatestVersionNumber' \
+      --output text)
 
-  instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType')
-  user_data=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.UserData')
+  version_data=$(aws ec2 describe-launch-template-versions \
+      --launch-template-name "$lt_name" \
+      --versions "$latest_version" \
+      --region "$REGION")
 
-  if [ "$instance_type" == "t3.micro" ]; then
+  instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType // empty')
+  user_data=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.UserData // empty')
+
+  if [[ "$instance_type" == "t3.micro" ]]; then
     echo "✅ Launch Template uses t3.micro"
     total_score=$((total_score + 5))
   else
-    echo "❌ Launch Template is not t3.micro"
+    echo "❌ Launch Template is not t3.micro (found: $instance_type)"
   fi
 
-  if [ -n "$user_data" ] && [ "$user_data" != "null" ]; then
+  if [[ -n "$user_data" ]]; then
     echo "✅ Launch Template includes user data"
     total_score=$((total_score + 5))
   else
@@ -70,12 +79,12 @@ fi
 echo
 echo "[Task 2: ALB + ASG + TG (25%)]"
 
-alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \`$alb_name\`)].LoadBalancerArn" --output text)
+alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \\`$alb_name\\`)].LoadBalancerArn" --output text)
 if [ -n "$alb_arn" ]; then
   echo "✅ ALB '$alb_name' exists"
   total_score=$((total_score + 5))
 
-  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \`$alb_name\`)].DNSName" --output text)
+  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \\`$alb_name\\`)].DNSName" --output text)
   if curl -s "http://$alb_dns" | grep -iq "$lower_name"; then
     echo "✅ ALB DNS shows student name"
     total_score=$((total_score + 5))
@@ -86,7 +95,7 @@ else
   echo "❌ ALB '$alb_name' not found"
 fi
 
-tg_check=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[?contains(TargetGroupName, \`$tg_name\`)]" --output text)
+tg_check=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[?contains(TargetGroupName, \\`$tg_name\\`)]" --output text)
 if [ -n "$tg_check" ]; then
   echo "✅ Target Group '$tg_name' exists"
   total_score=$((total_score + 5))
