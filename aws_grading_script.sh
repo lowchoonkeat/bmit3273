@@ -103,7 +103,7 @@ else
 fi
 
 #############################################
-# Task 3: S3 Static Website (20%)
+# Task 3: s3 static website (20%)
 #############################################
 echo
 echo "[Task 3: s3 static website (20%)]"
@@ -133,10 +133,10 @@ if [ -n "$bucket_name" ]; then
   website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
   if curl -s "$website_url" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
     echo "✅ s3 page shows student name"
-    total_score=$((total_score + 3))
+    total_score=$((total_score + 4))
   elif curl -s "$website_url" > /dev/null; then
     echo "✅ s3 site accessible"
-    total_score=$((total_score + 3))
+    total_score=$((total_score + 4))
   else
     echo "❌ s3 site not accessible"
   fi
@@ -144,7 +144,7 @@ if [ -n "$bucket_name" ]; then
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$bp_check" ]; then
     echo "✅ bucket policy configured"
-    total_score=$((total_score + 1))
+    total_score=$((total_score + 3))
   else
     echo "❌ no bucket policy found"
   fi
@@ -152,7 +152,7 @@ if [ -n "$bucket_name" ]; then
   pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
   if [ "$pab_status" = "true" ]; then
     echo "✅ public access block disabled"
-    total_score=$((total_score + 1))
+    total_score=$((total_score + 3))
   else
     echo "❌ public access block still enabled"
   fi
