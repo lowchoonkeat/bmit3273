@@ -2,8 +2,8 @@
 
 echo "=== AWS Practical Assessment Grading Script ==="
 read -p "Enter your full name (e.g., LowChoonKeat): " STUDENT_NAME
-read -p "Region: " REGION
 
+REGION="us-east-1"
 lower_name=$(echo "$STUDENT_NAME" | tr '[:upper:]' '[:lower:]')
 lt_name="lt-$lower_name"
 asg_name="asg-$lower_name"
@@ -13,7 +13,10 @@ bucket_name_prefix="s3-$lower_name"
 
 total_score=0
 
+#############################################
 # Task 1: EC2 and Launch Template (25%)
+#############################################
+echo
 echo "[Task 1: EC2 + Launch Template (25%)]"
 
 lt_check=$(aws ec2 describe-launch-templates --region "$REGION" --query "LaunchTemplates[?LaunchTemplateName=='$lt_name']" --output text)
@@ -60,7 +63,10 @@ else
   echo "❌ No EC2 instance running with your name"
 fi
 
-# Task 2: ALB + ASG + Target Group (25%)
+#############################################
+# Task 2: ALB + ASG + TG (25%)
+#############################################
+echo
 echo "[Task 2: ALB + ASG + TG (25%)]"
 
 alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?contains(LoadBalancerName, \`$alb_name\`)].LoadBalancerArn" --output text)
@@ -103,7 +109,10 @@ else
   echo "❌ ASG '$asg_name' not found"
 fi
 
+#############################################
 # Task 3: S3 Static Website (20%)
+#############################################
+echo
 echo "[Task 3: S3 Static Website (20%)]"
 
 bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | grep "$bucket_name_prefix" | head -n 1)
@@ -158,6 +167,10 @@ else
   echo "❌ S3 bucket not found"
 fi
 
+#############################################
+# Final Score
+#############################################
+echo
 echo "============================="
 echo "Final Score: $total_score / 70"
 echo "Report saved as: grading_report.txt"
