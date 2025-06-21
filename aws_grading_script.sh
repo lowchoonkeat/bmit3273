@@ -25,9 +25,10 @@ if [ -n "$lt_check" ]; then
   echo "✅ Launch Template '$lt_name' found"
   total_score=$((total_score + 5))
 
-  version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions \"$Latest\" --region "$REGION" 2>/dev/null)
-  instance_type=$(echo "$version_data" | grep -o '"InstanceType": "[^"]*' | cut -d'"' -f4)
-  user_data=$(echo "$version_data" | grep -o '"UserData": "[^"]*' | cut -d'"' -f4)
+  version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions \$Latest --region "$REGION" 2>/dev/null)
+
+  instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType')
+  user_data=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.UserData')
 
   if [ "$instance_type" == "t3.micro" ]; then
     echo "✅ Launch Template uses t3.micro"
@@ -36,7 +37,7 @@ if [ -n "$lt_check" ]; then
     echo "❌ Launch Template is not t3.micro"
   fi
 
-  if [ -n "$user_data" ]; then
+  if [ -n "$user_data" ] && [ "$user_data" != "null" ]; then
     echo "✅ Launch Template includes user data"
     total_score=$((total_score + 5))
   else
