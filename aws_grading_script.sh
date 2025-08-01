@@ -103,23 +103,23 @@ else
 fi
 
 #############################################
-# Task 3: s3 static website (35%)
+# Task 3: S3 Static Website (35%)
 #############################################
 echo
-echo "[Task 3: s3 static website (35%)]"
+echo "[Task 3: S3 Static Website (35%)]"
 
 bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | grep "$bucket_name_prefix" | head -n 1)
 
 if [ -n "$bucket_name" ]; then
-  echo "✅ s3 bucket '$bucket_name' found"
-  total_score=$((total_score + 3))
+  echo "✅ S3 bucket '$bucket_name' found"
+  total_score=$((total_score + 5))
 
   website_config=$(aws s3api get-bucket-website --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$website_config" ]; then
-    echo "✅ static website hosting enabled"
-    total_score=$((total_score + 7))
+    echo "✅ Static website hosting enabled"
+    total_score=$((total_score + 8))
   else
-    echo "❌ static website hosting not enabled"
+    echo "❌ Static website hosting not enabled"
   fi
 
   index_found=$(aws s3api list-objects --bucket "$bucket_name" --region "$REGION" --query "Contents[].Key" --output text | grep -i index)
@@ -132,32 +132,32 @@ if [ -n "$bucket_name" ]; then
 
   website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
   if curl -s "$website_url" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
-    echo "✅ s3 page shows student name"
+    echo "✅ S3 page shows student name"
     total_score=$((total_score + 5))
   elif curl -s "$website_url" > /dev/null; then
-    echo "✅ s3 site accessible"
+    echo "✅ S3 site accessible"
     total_score=$((total_score + 5))
   else
-    echo "❌ s3 site not accessible"
+    echo "❌ S3 site not accessible"
   fi
 
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
   if [ -n "$bp_check" ]; then
-    echo "✅ bucket policy configured"
-    total_score=$((total_score + 4))
+    echo "✅ Bucket policy configured"
+    total_score=$((total_score + 5))
   else
-    echo "❌ no bucket policy found"
+    echo "❌ No bucket policy found"
   fi
 
   pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
   if [ "$pab_status" = "true" ]; then
-    echo "✅ public access block disabled"
-    total_score=$((total_score + 4))
+    echo "✅ Public access block disabled"
+    total_score=$((total_score + 5))
   else
-    echo "❌ public access block still enabled"
+    echo "❌ Public access block still enabled"
   fi
 else
-  echo "❌ s3 bucket not found"
+  echo "❌ S3 bucket not found"
 fi
 
 #############################################
