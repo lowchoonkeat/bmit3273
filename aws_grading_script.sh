@@ -14,16 +14,16 @@ bucket_name_prefix="s3-$lower_name"
 total_score=0
 
 #############################################
-# Task 1: EC2 and Launch Template (15%)
+# Task 1: EC2 and Launch Template (30%)
 #############################################
 echo
-echo "[Task 1: EC2 + Launch Template (15%)]"
+echo "[Task 1: EC2 + Launch Template (30%)]"
 
 lt_check=$(aws ec2 describe-launch-templates --region "$REGION" --query "LaunchTemplates[?LaunchTemplateName=='$lt_name']" --output text)
 
 if [ -n "$lt_check" ]; then
   echo "✅ Launch Template '$lt_name' found"
-  total_score=$((total_score + 5))
+  total_score=$((total_score + 10))
 
   latest_version=$(aws ec2 describe-launch-templates \
       --region "$REGION" \
@@ -41,14 +41,14 @@ if [ -n "$lt_check" ]; then
 
   if [[ "$instance_type" == "t3.micro" ]]; then
     echo "✅ Launch Template uses t3.micro"
-    total_score=$((total_score + 5))
+    total_score=$((total_score + 10))
   else
     echo "❌ Launch Template is not t3.micro (found: $instance_type)"
   fi
 
   if [[ -n "$user_data" ]]; then
     echo "✅ Launch Template includes user data"
-    total_score=$((total_score + 5))
+    total_score=$((total_score + 10))
   else
     echo "❌ Launch Template missing user data"
   fi
@@ -57,20 +57,20 @@ else
 fi
 
 #############################################
-# Task 2: ALB + ASG + TG (25%)
+# Task 2: ALB + ASG + TG (35%)
 #############################################
 echo
-echo "[Task 2: ALB + ASG + TG (25%)]"
+echo "[Task 2: ALB + ASG + TG (35%)]"
 
 alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerName=='$alb_name'].LoadBalancerArn" --output text)
 if [ -n "$alb_arn" ]; then
   echo "✅ ALB '$alb_name' exists"
-  total_score=$((total_score + 5))
+  total_score=$((total_score + 7))
 
   alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" --output text)
   if curl -s "http://$alb_dns" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
     echo "✅ ALB DNS shows student name"
-    total_score=$((total_score + 5))
+    total_score=$((total_score + 7))
   else
     echo "❌ ALB DNS does not show student name"
   fi
@@ -81,7 +81,7 @@ fi
 tg_check=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[?TargetGroupName=='$tg_name']" --output text)
 if [ -n "$tg_check" ]; then
   echo "✅ Target Group '$tg_name' exists"
-  total_score=$((total_score + 5))
+  total_score=$((total_score + 7))
 else
   echo "❌ Target Group '$tg_name' not found"
 fi
@@ -89,12 +89,12 @@ fi
 asg_check=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output text)
 if [ -n "$asg_check" ]; then
   echo "✅ ASG '$asg_name' exists"
-  total_score=$((total_score + 5))
+  total_score=$((total_score + 7))
 
   config=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --auto-scaling-group-names "$asg_name" --query "AutoScalingGroups[0].[MinSize,MaxSize,DesiredCapacity]" --output text)
   if echo "$config" | grep -q -E "^1\s+3\s+1"; then
     echo "✅ ASG scaling config is correct (1/3/1)"
-    total_score=$((total_score + 5))
+    total_score=$((total_score + 7))
   else
     echo "❌ ASG scaling config not correct"
   fi
@@ -103,10 +103,10 @@ else
 fi
 
 #############################################
-# Task 3: s3 static website (30%)
+# Task 3: s3 static website (35%)
 #############################################
 echo
-echo "[Task 3: s3 static website (30%)]"
+echo "[Task 3: s3 static website (35%)]"
 
 bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | grep "$bucket_name_prefix" | head -n 1)
 
@@ -165,6 +165,6 @@ fi
 #############################################
 echo
 echo "============================="
-echo "Final Score: $total_score / 70"
+echo "Final Score: $total_score / 100"
 echo "Report saved as: grading_report.txt"
-echo "Final Score: $total_score / 70" > grading_report.txt
+echo "Final Score: $total_score / 100" > grading_report.txt
