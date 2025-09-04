@@ -144,8 +144,16 @@ if [ -n "$bucket_name" ]; then
   bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
 
   if [ -n "$bp_check" ]; then
-    # Parse with jq instead of grep
-    allow_check=$(echo "$bp_check" | jq -r '.Statement[] | select(.Effect=="Allow") | select(.Action|tostring|test("s3:GetObject")) | .Effect' 2>/dev/null)
+    # Full policy validation with jq
+    allow_check=$(echo "$bp_check" | jq -r '
+      .Statement[] 
+      | select(.Effect=="Allow") 
+      | select(.Action|tostring|test("s3:GetObject")) 
+      | select(
+          (.Principal=="*") 
+          or (.Principal.AWS=="*")
+        ) 
+      | .Effect' 2>/dev/null)
 
     if [[ "$allow_check" == "Allow" ]]; then
       echo "✅ Bucket policy configured correctly"
