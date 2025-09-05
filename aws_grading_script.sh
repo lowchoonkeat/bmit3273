@@ -1,220 +1,181 @@
 #!/bin/bash
 
-# =========================================
-# AWS Practical Assessment Grading Script
-# =========================================
-
 echo "=== AWS Practical Assessment Grading Script ==="
+read -p "Enter your full name (e.g., LowChoonKeat): " STUDENT_NAME
 
-REPORT_FILE="grading_report.txt"
-DETAILS=false
+REGION="us-east-1"
+lower_name=$(echo "$STUDENT_NAME" | tr '[:upper:]' '[:lower:]')
+lt_name="lt-$lower_name"
+asg_name="asg-$lower_name"
+alb_name="alb-$lower_name"
+tg_name="tg-$lower_name"
+bucket_name_prefix="s3-$lower_name"
 
-# Check if teacher mode
-if [[ "$1" == "--teacher" ]]; then
-    DETAILS=true
-fi
+total_score=0
 
-read -p "Enter your full name (e.g., LowChoonKeat): " name
-score=0
+#############################################
+# Task 1: EC2 and Launch Template (30%)
+#############################################
+echo
+echo "[Task 1: EC2 + Launch Template (30%)]"
 
-echo "" > "$REPORT_FILE"
+lt_check=$(aws ec2 describe-launch-templates --region "$REGION" --query "LaunchTemplates[?LaunchTemplateName=='$lt_name']" --output text)
 
-# ================================
-# Task 1: EC2 + Launch Template (30%)
-# ================================
-lt_name="lt-$name"
-lt=$(aws ec2 describe-launch-templates \
-  --query "LaunchTemplates[?LaunchTemplateName=='$lt_name'].LaunchTemplateName" \
-  --output text 2>/dev/null)
+if [ -n "$lt_check" ]; then
+  echo "✅ Launch Template '$lt_name' found"
+  total_score=$((total_score + 6))
 
-if [[ "$lt" == "$lt_name" ]]; then
-    $DETAILS && echo "✅ Launch Template '$lt_name' found (+10)" | tee -a "$REPORT_FILE"
-    score=$((score+10))
+  latest_version=$(aws ec2 describe-launch-templates \
+      --region "$REGION" \
+      --launch-template-names "$lt_name" \
+      --query 'LaunchTemplates[0].LatestVersionNumber' \
+      --output text)
 
-    lt_details=$(aws ec2 describe-launch-template-versions \
+  version_data=$(aws ec2 describe-launch-template-versions \
       --launch-template-name "$lt_name" \
-      --versions "\$Latest" \
-      --query "LaunchTemplateVersions[0]" \
-      --output json 2>/dev/null)
+      --versions "$latest_version" \
+      --region "$REGION")
 
-    inst_type=$(echo "$lt_details" | jq -r '.LaunchTemplateData.InstanceType')
-    ami_id=$(echo "$lt_details" | jq -r '.LaunchTemplateData.ImageId')
-    user_data=$(echo "$lt_details" | jq -r '.LaunchTemplateData.UserData')
+  instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType // empty')
+  image_id=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.ImageId // empty')
+  user_data=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.UserData // empty')
 
-    if [[ "$inst_type" == "t3.micro" ]]; then
-        $DETAILS && echo "✅ Launch Template uses t3.micro (+10)" | tee -a "$REPORT_FILE"
-        score=$((score+10))
-    else
-        $DETAILS && echo "❌ Wrong instance type ($inst_type)" | tee -a "$REPORT_FILE"
-    fi
+  # Check instance type
+  if [[ "$instance_type" == "t3.micro" ]]; then
+    echo "✅ Launch Template uses t3.micro"
+    total_score=$((total_score + 7))
+  else
+    echo "❌ Launch Template is not t3.micro (found: $instance_type)"
+  fi
 
-    if [[ "$ami_id" != "null" && -n "$ami_id" ]]; then
-        $DETAILS && echo "✅ AMI ImageId set ($ami_id) (+5)" | tee -a "$REPORT_FILE"
-        score=$((score+5))
-    else
-        $DETAILS && echo "❌ AMI ImageId not set" | tee -a "$REPORT_FILE"
-    fi
+  # Check AMI ImageId
+  if [[ -n "$image_id" ]]; then
+    echo "✅ AMI ImageId set ($image_id)"
+    total_score=$((total_score + 7))
+  else
+    echo "❌ No AMI ImageId selected"
+  fi
 
-    if [[ "$user_data" != "null" && -n "$user_data" ]]; then
-        $DETAILS && echo "✅ Launch Template includes user data (+5)" | tee -a "$REPORT_FILE"
-        score=$((score+5))
-    else
-        $DETAILS && echo "❌ Launch Template missing user data" | tee -a "$REPORT_FILE"
-    fi
+  # Check user data
+  if [[ -n "$user_data" ]]; then
+    echo "✅ Launch Template includes user data"
+    total_score=$((total_score + 10))
+  else
+    echo "❌ Launch Template missing user data"
+  fi
 else
-    $DETAILS && echo "❌ Launch Template '$lt_name' not found" | tee -a "$REPORT_FILE"
+  echo "❌ Launch Template '$lt_name' NOT found"
 fi
 
-# ================================
+#############################################
 # Task 2: ALB + ASG + TG (35%)
-# ================================
-alb_name="alb-$name"
-tg_name="tg-$name"
-asg_name="asg-$name"
+#############################################
+echo
+echo "[Task 2: ALB + ASG + TG (35%)]"
 
-# ALB Check
-alb=$(aws elbv2 describe-load-balancers \
-  --names "$alb_name" \
-  --query "LoadBalancers[0].LoadBalancerName" \
-  --output text 2>/dev/null)
+alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerName=='$alb_name'].LoadBalancerArn" --output text)
+if [ -n "$alb_arn" ]; then
+  echo "✅ ALB '$alb_name' exists"
+  total_score=$((total_score + 7))
 
-if [[ "$alb" == "$alb_name" ]]; then
-    $DETAILS && echo "✅ ALB '$alb_name' exists (+7)" | tee -a "$REPORT_FILE"
-    score=$((score+7))
-
-    alb_dns=$(aws elbv2 describe-load-balancers \
-      --names "$alb_name" \
-      --query "LoadBalancers[0].DNSName" \
-      --output text 2>/dev/null)
-
-    if [[ -n "$alb_dns" ]]; then
-        if echo "$alb_dns" | grep -iq "$name"; then
-            $DETAILS && echo "✅ ALB DNS shows student name (+7)" | tee -a "$REPORT_FILE"
-            score=$((score+7))
-        else
-            $DETAILS && echo "❌ ALB DNS does not show student name" | tee -a "$REPORT_FILE"
-        fi
-    fi
+  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" --output text)
+  if curl -s "http://$alb_dns" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
+    echo "✅ ALB DNS shows student name"
+    total_score=$((total_score + 7))
+  else
+    echo "❌ ALB DNS does not show student name"
+  fi
 else
-    $DETAILS && echo "❌ ALB '$alb_name' not found" | tee -a "$REPORT_FILE"
+  echo "❌ ALB '$alb_name' not found"
 fi
 
-# Target Group
-tg=$(aws elbv2 describe-target-groups \
-  --names "$tg_name" \
-  --query "TargetGroups[0].TargetGroupName" \
-  --output text 2>/dev/null)
-
-if [[ "$tg" == "$tg_name" ]]; then
-    $DETAILS && echo "✅ Target Group '$tg_name' exists (+7)" | tee -a "$REPORT_FILE"
-    score=$((score+7))
+tg_check=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[?TargetGroupName=='$tg_name']" --output text)
+if [ -n "$tg_check" ]; then
+  echo "✅ Target Group '$tg_name' exists"
+  total_score=$((total_score + 7))
 else
-    $DETAILS && echo "❌ Target Group '$tg_name' not found" | tee -a "$REPORT_FILE"
+  echo "❌ Target Group '$tg_name' not found"
 fi
 
-# ASG
-asg=$(aws autoscaling describe-auto-scaling-groups \
-  --auto-scaling-group-names "$asg_name" \
-  --query "AutoScalingGroups[0].AutoScalingGroupName" \
-  --output text 2>/dev/null)
+asg_check=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output text)
+if [ -n "$asg_check" ]; then
+  echo "✅ ASG '$asg_name' exists"
+  total_score=$((total_score + 7))
 
-if [[ "$asg" == "$asg_name" ]]; then
-    $DETAILS && echo "✅ ASG '$asg_name' exists (+7)" | tee -a "$REPORT_FILE"
-    score=$((score+7))
-
-    min=$(aws autoscaling describe-auto-scaling-groups \
-      --auto-scaling-group-names "$asg_name" \
-      --query "AutoScalingGroups[0].MinSize" \
-      --output text)
-    max=$(aws autoscaling describe-auto-scaling-groups \
-      --auto-scaling-group-names "$asg_name" \
-      --query "AutoScalingGroups[0].MaxSize" \
-      --output text)
-    des=$(aws autoscaling describe-auto-scaling-groups \
-      --auto-scaling-group-names "$asg_name" \
-      --query "AutoScalingGroups[0].DesiredCapacity" \
-      --output text)
-
-    if [[ "$min" -eq 1 && "$max" -eq 3 && "$des" -eq 1 ]]; then
-        $DETAILS && echo "✅ ASG scaling config is correct (1/3/1) (+7)" | tee -a "$REPORT_FILE"
-        score=$((score+7))
-    else
-        $DETAILS && echo "❌ ASG scaling config incorrect (min=$min, max=$max, desired=$des)" | tee -a "$REPORT_FILE"
-    fi
+  config=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --auto-scaling-group-names "$asg_name" --query "AutoScalingGroups[0].[MinSize,MaxSize,DesiredCapacity]" --output text)
+  if echo "$config" | grep -q -E "^1\s+3\s+1"; then
+    echo "✅ ASG scaling config is correct (1/3/1)"
+    total_score=$((total_score + 7))
+  else
+    echo "❌ ASG scaling config not correct"
+  fi
 else
-    $DETAILS && echo "❌ ASG '$asg_name' not found" | tee -a "$REPORT_FILE"
+  echo "❌ ASG '$asg_name' not found"
 fi
 
-# ================================
+#############################################
 # Task 3: S3 Static Website (35%)
-# ================================
-bucket_name="s3-$name-test"
+#############################################
+echo
+echo "[Task 3: S3 Static Website (35%)]"
 
-bucket=$(aws s3api head-bucket --bucket "$bucket_name" 2>/dev/null)
-if [[ $? -eq 0 ]]; then
-    $DETAILS && echo "✅ S3 bucket '$bucket_name' found (+5)" | tee -a "$REPORT_FILE"
-    score=$((score+5))
+bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | grep "$bucket_name_prefix" | head -n 1)
 
-    website=$(aws s3api get-bucket-website --bucket "$bucket_name" 2>/dev/null)
-    if [[ $? -eq 0 ]]; then
-        $DETAILS && echo "✅ Static website hosting enabled (+8)" | tee -a "$REPORT_FILE"
-        score=$((score+8))
-    else
-        $DETAILS && echo "❌ Static website hosting not enabled" | tee -a "$REPORT_FILE"
-    fi
+if [ -n "$bucket_name" ]; then
+  echo "✅ S3 bucket '$bucket_name' found"
+  total_score=$((total_score + 5))
 
-    index_check=$(aws s3api list-objects --bucket "$bucket_name" \
-      --query "Contents[].Key" --output text | grep -i "index.html")
+  website_config=$(aws s3api get-bucket-website --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
+  if [ -n "$website_config" ]; then
+    echo "✅ Static website hosting enabled"
+    total_score=$((total_score + 8))
+  else
+    echo "❌ Static website hosting not enabled"
+  fi
 
-    if [[ -n "$index_check" ]]; then
-        $DETAILS && echo "✅ index.html uploaded (+7)" | tee -a "$REPORT_FILE"
-        score=$((score+7))
+  index_found=$(aws s3api list-objects --bucket "$bucket_name" --region "$REGION" --query "Contents[].Key" --output text | grep -i index)
+  if [ -n "$index_found" ]; then
+    echo "✅ index.html uploaded"
+    total_score=$((total_score + 7))
+  else
+    echo "❌ index.html not found"
+  fi
 
-        # Try accessing website
-        endpoint="http://$bucket_name.s3-website-us-east-1.amazonaws.com"
-        content=$(curl -s "$endpoint")
-        if echo "$content" | grep -iq "$name"; then
-            $DETAILS && echo "✅ S3 site accessible (+5)" | tee -a "$REPORT_FILE"
-            score=$((score+5))
-        else
-            $DETAILS && echo "❌ S3 page does not show student name" | tee -a "$REPORT_FILE"
-        fi
-    else
-        $DETAILS && echo "❌ index.html missing" | tee -a "$REPORT_FILE"
-    fi
+  website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
+  if curl -s "$website_url" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
+    echo "✅ S3 page shows student name"
+    total_score=$((total_score + 5))
+  elif curl -s "$website_url" > /dev/null; then
+    echo "✅ S3 site accessible"
+    total_score=$((total_score + 5))
+  else
+    echo "❌ S3 site not accessible"
+  fi
 
-    policy=$(aws s3api get-bucket-policy --bucket "$bucket_name" 2>/dev/null)
-    if [[ $? -eq 0 ]]; then
-        $DETAILS && echo "✅ Bucket policy configured (+5)" | tee -a "$REPORT_FILE"
-        score=$((score+5))
-    else
-        $DETAILS && echo "❌ No bucket policy found" | tee -a "$REPORT_FILE"
-    fi
+  bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
+  if [ -n "$bp_check" ]; then
+    echo "✅ Bucket policy configured"
+    total_score=$((total_score + 5))
+  else
+    echo "❌ No bucket policy found"
+  fi
 
-    pab=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" \
-      --query "PolicyStatus.IsPublic" --output text 2>/dev/null)
-
-    if [[ "$pab" == "True" ]]; then
-        $DETAILS && echo "✅ Public access block disabled (+5)" | tee -a "$REPORT_FILE"
-        score=$((score+5))
-    else
-        $DETAILS && echo "❌ Public access block still enabled" | tee -a "$REPORT_FILE"
-    fi
+  pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
+  if [ "$pab_status" = "true" ]; then
+    echo "✅ Public access block disabled"
+    total_score=$((total_score + 5))
+  else
+    echo "❌ Public access block still enabled"
+  fi
 else
-    $DETAILS && echo "❌ Bucket '$bucket_name' not found" | tee -a "$REPORT_FILE"
+  echo "❌ S3 bucket not found"
 fi
 
-# ================================
-# Final Report
-# ================================
-echo ""
+#############################################
+# Final Score
+#############################################
+echo
 echo "============================="
-echo "Final Score: $score / 100"
-echo "============================="
-
-if $DETAILS; then
-    echo "" >> "$REPORT_FILE"
-    echo "Detailed Breakdown:" >> "$REPORT_FILE"
-    cat "$REPORT_FILE"
-fi
-
+echo "Final Score: $total_score / 100"
+echo "Report saved as: grading_report.txt"
+echo "Final Score: $total_score / 100" > grading_report.txt
