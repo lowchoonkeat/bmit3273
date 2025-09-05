@@ -37,15 +37,26 @@ if [ -n "$lt_check" ]; then
       --region "$REGION")
 
   instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType // empty')
+  image_id=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.ImageId // empty')
   user_data=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.UserData // empty')
 
+  # Check instance type
   if [[ "$instance_type" == "t3.micro" ]]; then
     echo "✅ Launch Template uses t3.micro"
-    total_score=$((total_score + 10))
+    total_score=$((total_score + 7))
   else
     echo "❌ Launch Template is not t3.micro (found: $instance_type)"
   fi
 
+  # Check AMI ImageId
+  if [[ -n "$image_id" ]]; then
+    echo "✅ AMI ImageId set ($image_id)"
+    total_score=$((total_score + 3))
+  else
+    echo "❌ No AMI ImageId selected"
+  fi
+
+  # Check user data
   if [[ -n "$user_data" ]]; then
     echo "✅ Launch Template includes user data"
     total_score=$((total_score + 10))
