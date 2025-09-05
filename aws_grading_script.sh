@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "=== AWS Practical Assessment Grading Script ==="
-read -p "Enter your full name (e.g., LowChoonKeat): " STUDENT_NAME
+read -p "Enter your full name (e.g., lowchoonkeat): " STUDENT_NAME
 
 REGION="us-east-1"
 lower_name=$(echo "$STUDENT_NAME" | tr '[:upper:]' '[:lower:]')
