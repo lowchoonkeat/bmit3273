@@ -23,7 +23,7 @@ lt_check=$(aws ec2 describe-launch-templates --region "$REGION" --query "LaunchT
 
 if [ -n "$lt_check" ]; then
   echo "✅ Launch Template '$lt_name' found"
-  total_score=$((total_score + 10))
+  total_score=$((total_score + 6))
 
   latest_version=$(aws ec2 describe-launch-templates \
       --region "$REGION" \
@@ -51,7 +51,7 @@ if [ -n "$lt_check" ]; then
   # Check AMI ImageId
   if [[ -n "$image_id" ]]; then
     echo "✅ AMI ImageId set ($image_id)"
-    total_score=$((total_score + 3))
+    total_score=$((total_score + 7))
   else
     echo "❌ No AMI ImageId selected"
   fi
