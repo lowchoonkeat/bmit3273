@@ -28,7 +28,7 @@ if [ -n "$lt_check" ]; then
   [[ $MODE == "teacher" ]] && echo "✅ Launch Template '$lt_name' found"
   total_score=$((total_score + 7))
 
-  # Get User Data and instance type for verification
+  # Get Launch Template details
   latest_version=$(aws ec2 describe-launch-templates --region "$REGION" --launch-template-names "$lt_name" --query 'LaunchTemplates[0].LatestVersionNumber' --output text)
   version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions "$latest_version" --region "$REGION")
   instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType // empty')
@@ -48,9 +48,16 @@ if [ -n "$lt_check" ]; then
     [[ $MODE == "teacher" ]] && echo "❌ Launch Template missing User Data"
   fi
 
-  # Detect any EC2 instance launched from this template (any version)
+  # Get Launch Template ID
+  lt_id=$(aws ec2 describe-launch-templates \
+    --launch-template-names "$lt_name" \
+    --region "$REGION" \
+    --query 'LaunchTemplates[0].LaunchTemplateId' \
+    --output text)
+
+  # Detect any running EC2 instance using this Launch Template
   instance_check=$(aws ec2 describe-instances \
-    --filters "Name=launch-template.launch-template-name,Values=$lt_name" \
+    --filters "Name=launch-template.launch-template-id,Values=$lt_id" \
     --query "Reservations[].Instances[?State.Name=='running'].InstanceId" \
     --output text)
 
