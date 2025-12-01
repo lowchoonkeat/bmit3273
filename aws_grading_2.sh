@@ -1,5 +1,7 @@
 #!/bin/bash
+
 echo "=== BMIT3273 AWS Practical Assessment Grading Script ==="
+
 read -p "Enter your full name (lowercase, no spaces recommended e.g., lowchoonkeat): " STUDENT_NAME
 
 MODE="student"
@@ -14,6 +16,7 @@ asg_name="asg-$lower_name"
 alb_name="alb-$lower_name"
 tg_name="tg-$lower_name"
 bucket_name_prefix="s3-$lower_name"
+rds_name="rds-$STUDENT_NAME"
 
 total_score=0
 
@@ -22,23 +25,26 @@ total_score=0
 #############################################
 [[ $MODE == "teacher" ]] && echo -e "\n[Task 1: EC2 + Launch Template (25%)]"
 
-# Check Launch Template existence
-lt_check=$(aws ec2 describe-launch-templates --region "$REGION" --query "LaunchTemplates[?LaunchTemplateName=='$lt_name']" --output text)
-if [ -n "$lt_check" ]; then
+lt_info=$(aws ec2 describe-launch-templates --region "$REGION" --launch-template-names "$lt_name" --query "LaunchTemplates[0]" --output json 2>/dev/null)
+
+if [[ -n "$lt_info" ]]; then
   [[ $MODE == "teacher" ]] && echo "✅ Launch Template '$lt_name' found"
   total_score=$((total_score + 7))
 
-  # Get Launch Template details
-  latest_version=$(aws ec2 describe-launch-templates --region "$REGION" --launch-template-names "$lt_name" --query 'LaunchTemplates[0].LatestVersionNumber' --output text)
-  version_data=$(aws ec2 describe-launch-template-versions --launch-template-name "$lt_name" --versions "$latest_version" --region "$REGION")
-  instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType // empty')
-  user_data=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.UserData // empty')
+  # Fetch Launch Template ID
+  lt_id=$(echo "$lt_info" | jq -r '.LaunchTemplateId')
+
+  # Check instance type
+  latest_version=$(echo "$lt_info" | jq -r '.LatestVersionNumber')
+  version_data=$(aws ec2 describe-launch-template-versions --launch-template-id "$lt_id" --versions "$latest_version" --region "$REGION")
+  instance_type=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.InstanceType')
+  user_data=$(echo "$version_data" | jq -r '.LaunchTemplateVersions[0].LaunchTemplateData.UserData')
 
   if [[ "$instance_type" == "t3.medium" ]]; then
     [[ $MODE == "teacher" ]] && echo "✅ Launch Template uses t3.medium"
     total_score=$((total_score + 5))
   else
-    [[ $MODE == "teacher" ]] && echo "❌ Launch Template instance type not t3.medium (found: $instance_type)"
+    [[ $MODE == "teacher" ]] && echo "❌ Launch Template instance type is '$instance_type', expected t3.medium"
   fi
 
   if [[ -n "$user_data" ]]; then
@@ -48,22 +54,15 @@ if [ -n "$lt_check" ]; then
     [[ $MODE == "teacher" ]] && echo "❌ Launch Template missing User Data"
   fi
 
-  # Get Launch Template ID
-  lt_id=$(aws ec2 describe-launch-templates \
-    --launch-template-names "$lt_name" \
-    --region "$REGION" \
-    --query 'LaunchTemplates[0].LaunchTemplateId' \
-    --output text)
-
-  # Detect any running EC2 instance using this Launch Template
+  # Check running EC2 instances launched from this template
   instance_check=$(aws ec2 describe-instances \
-    --filters "Name=launch-template.launch-template-id,Values=$lt_id" \
-    --query "Reservations[].Instances[?State.Name=='running'].InstanceId" \
-    --output text)
+    --filters "Name=launch-template.id,Values=$lt_id" \
+              "Name=instance-state-name,Values=running" \
+    --query "Reservations[].Instances[].InstanceId" --output text)
 
-  if [ -n "$instance_check" ]; then
-    [[ $MODE == "teacher" ]] && echo "✅ EC2 instance launched from Launch Template found: $instance_check"
-    total_score=$((total_score + 3))
+  if [[ -n "$instance_check" ]]; then
+    [[ $MODE == "teacher" ]] && echo "✅ Running EC2 instance(s) found from Launch Template"
+    total_score=$((total_score + 7))
   else
     [[ $MODE == "teacher" ]] && echo "❌ No running EC2 instance found launched from Launch Template '$lt_name'"
   fi
@@ -77,44 +76,42 @@ fi
 #############################################
 [[ $MODE == "teacher" ]] && echo -e "\n[Task 2: ALB + ASG + TG (25%)]"
 
-alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerName=='$alb_name'].LoadBalancerArn" --output text)
-if [ -n "$alb_arn" ]; then
+alb_arn=$(aws elbv2 describe-load-balancers --region "$REGION" --names "$alb_name" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null)
+if [[ -n "$alb_arn" ]]; then
   [[ $MODE == "teacher" ]] && echo "✅ ALB '$alb_name' exists"
   total_score=$((total_score + 5))
-
-  alb_dns=$(aws elbv2 describe-load-balancers --region "$REGION" --query "LoadBalancers[?LoadBalancerName=='$alb_name'].DNSName" --output text)
-  if curl -s "http://$alb_dns" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
-    [[ $MODE == "teacher" ]] && echo "✅ ALB DNS shows student name"
-    total_score=$((total_score + 5))
-  else
-    [[ $MODE == "teacher" ]] && echo "❌ ALB DNS does not show student name"
-  fi
 else
   [[ $MODE == "teacher" ]] && echo "❌ ALB '$alb_name' not found"
 fi
 
-tg_check=$(aws elbv2 describe-target-groups --region "$REGION" --query "TargetGroups[?TargetGroupName=='$tg_name']" --output text)
-if [ -n "$tg_check" ]; then
+tg_arn=$(aws elbv2 describe-target-groups --region "$REGION" --names "$tg_name" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null)
+if [[ -n "$tg_arn" ]]; then
   [[ $MODE == "teacher" ]] && echo "✅ Target Group '$tg_name' exists"
   total_score=$((total_score + 5))
 else
   [[ $MODE == "teacher" ]] && echo "❌ Target Group '$tg_name' not found"
 fi
 
-asg_check=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --query "AutoScalingGroups[?AutoScalingGroupName=='$asg_name']" --output text)
-if [ -n "$asg_check" ]; then
+asg_info=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --auto-scaling-group-names "$asg_name" --query "AutoScalingGroups[0]" --output json 2>/dev/null)
+if [[ -n "$asg_info" ]]; then
   [[ $MODE == "teacher" ]] && echo "✅ ASG '$asg_name' exists"
   total_score=$((total_score + 5))
-
-  config=$(aws autoscaling describe-auto-scaling-groups --region "$REGION" --auto-scaling-group-names "$asg_name" --query "AutoScalingGroups[0].[MinSize,MaxSize,DesiredCapacity]" --output text)
-  if echo "$config" | grep -q -E "^1\s+4\s+2"; then
-    [[ $MODE == "teacher" ]] && echo "✅ ASG scaling config is correct (Min=1, Max=4, Desired=2)"
-    total_score=$((total_score + 5))
-  else
-    [[ $MODE == "teacher" ]] && echo "❌ ASG scaling config not correct"
-  fi
 else
   [[ $MODE == "teacher" ]] && echo "❌ ASG '$asg_name' not found"
+fi
+
+# Optional: check scaling config if ASG exists
+if [[ -n "$asg_info" ]]; then
+  min_size=$(echo "$asg_info" | jq -r '.MinSize')
+  desired_size=$(echo "$asg_info" | jq -r '.DesiredCapacity')
+  max_size=$(echo "$asg_info" | jq -r '.MaxSize')
+
+  if [[ "$min_size" == 1 && "$desired_size" == 2 && "$max_size" == 4 ]]; then
+    [[ $MODE == "teacher" ]] && echo "✅ ASG scaling configuration correct (Min=1, Desired=2, Max=4)"
+    total_score=$((total_score + 5))
+  else
+    [[ $MODE == "teacher" ]] && echo "❌ ASG scaling config incorrect (found Min=$min_size, Desired=$desired_size, Max=$max_size)"
+  fi
 fi
 
 #############################################
@@ -123,52 +120,26 @@ fi
 [[ $MODE == "teacher" ]] && echo -e "\n[Task 3: S3 Static Website (25%)]"
 
 bucket_name=$(aws s3api list-buckets --query "Buckets[].Name" --output text | tr '\t' '\n' | grep "$bucket_name_prefix" | head -n 1)
-if [ -n "$bucket_name" ]; then
+if [[ -n "$bucket_name" ]]; then
   [[ $MODE == "teacher" ]] && echo "✅ S3 bucket '$bucket_name' found"
   total_score=$((total_score + 5))
 
   website_config=$(aws s3api get-bucket-website --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
-  if [ -n "$website_config" ]; then
+  if [[ -n "$website_config" ]]; then
     [[ $MODE == "teacher" ]] && echo "✅ Static website hosting enabled"
-    total_score=$((total_score + 8))
+    total_score=$((total_score + 5))
   else
     [[ $MODE == "teacher" ]] && echo "❌ Static website hosting not enabled"
   fi
 
-  index_found=$(aws s3api list-objects --bucket "$bucket_name" --region "$REGION" --query "Contents[].Key" --output text | grep -i index)
-  if [ -n "$index_found" ]; then
+  index_file=$(aws s3api list-objects --bucket "$bucket_name" --query "Contents[].Key" --output text | grep -i "index.html")
+  if [[ -n "$index_file" ]]; then
     [[ $MODE == "teacher" ]] && echo "✅ index.html uploaded"
-    total_score=$((total_score + 7))
+    total_score=$((total_score + 5))
   else
     [[ $MODE == "teacher" ]] && echo "❌ index.html not found"
   fi
 
-  website_url="http://$bucket_name.s3-website-$REGION.amazonaws.com"
-  if curl -s "$website_url" | tr -d '[:space:]' | grep -iq "$(echo $STUDENT_NAME | tr -d '[:space:]')"; then
-    [[ $MODE == "teacher" ]] && echo "✅ S3 page shows student name"
-    total_score=$((total_score + 5))
-  elif curl -s "$website_url" > /dev/null; then
-    [[ $MODE == "teacher" ]] && echo "✅ S3 site accessible"
-    total_score=$((total_score + 5))
-  else
-    [[ $MODE == "teacher" ]] && echo "❌ S3 site not accessible"
-  fi
-
-  bp_check=$(aws s3api get-bucket-policy --bucket "$bucket_name" --region "$REGION" 2>/dev/null)
-  if [ -n "$bp_check" ]; then
-    [[ $MODE == "teacher" ]] && echo "✅ Bucket policy configured"
-    total_score=$((total_score + 5))
-  else
-    [[ $MODE == "teacher" ]] && echo "❌ No bucket policy found"
-  fi
-
-  pab_status=$(aws s3api get-bucket-policy-status --bucket "$bucket_name" --region "$REGION" 2>/dev/null | jq -r '.PolicyStatus.IsPublic')
-  if [ "$pab_status" = "true" ]; then
-    [[ $MODE == "teacher" ]] && echo "✅ Public access block disabled"
-    total_score=$((total_score + 5))
-  else
-    [[ $MODE == "teacher" ]] && echo "❌ Public access block still enabled"
-  fi
 else
   [[ $MODE == "teacher" ]] && echo "❌ S3 bucket not found"
 fi
@@ -178,12 +149,12 @@ fi
 #############################################
 [[ $MODE == "teacher" ]] && echo -e "\n[Task 4: RDS MySQL Integration (25%)]"
 
-rds_check=$(aws rds describe-db-instances --region "$REGION" --query "DBInstances[?DBInstanceIdentifier=='rds-$STUDENT_NAME']" --output text)
-if [ -n "$rds_check" ]; then
-  [[ $MODE == "teacher" ]] && echo "✅ RDS instance 'rds-$STUDENT_NAME' found"
-  total_score=$((total_score + 10))
+rds_info=$(aws rds describe-db-instances --region "$REGION" --db-instance-identifier "$rds_name" --query "DBInstances[0]" --output json 2>/dev/null)
+if [[ -n "$rds_info" ]]; then
+  [[ $MODE == "teacher" ]] && echo "✅ RDS instance '$rds_name' found"
+  total_score=$((total_score + 5))
 else
-  [[ $MODE == "teacher" ]] && echo "❌ RDS instance 'rds-$STUDENT_NAME' not found"
+  [[ $MODE == "teacher" ]] && echo "❌ RDS instance '$rds_name' not found"
 fi
 
 #############################################
