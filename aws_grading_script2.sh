@@ -406,7 +406,329 @@ if [ -n "$ALB_DNS" ]; then
         PAGE_CONTENT=$(curl -s --connect-timeout 10 "http://$ALB_DNS" 2>/dev/null || echo "")
         
         # Check for student name pattern
-        if echo "$PAGE_CONTENT" | grep -E "[A-Z][a-z]+ [A-Z][a-z]+|Welcome" > /dev/null 2>&1; then
+        if echo "$PAGE_CONTENT" | grep -E "[A-Z][a-z]+ [A-Z][a-z]+|Welcome|${STUDENT_NAME}" > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ Website shows correct webpage with student name${NC}"
+            TASK3_VERIFY_SCORE=5
+        elif [ -n "$PAGE_CONTENT" ]; then
+            echo -e "${YELLOW}⚠ Website accessible but student name or content missing${NC}"
+            TASK3_VERIFY_SCORE=3
+        else
+            echo -e "${RED}✗ Website accessible but no content${NC}"
+            TASK3_VERIFY_SCORE=0
+        fi
+    else
+        echo -e "${RED}✗ Website not accessible (HTTP $HTTP_RESPONSE)${NC}"
+        TASK3_VERIFY_SCORE=0
+    fi
+else
+    echo -e "${RED}✗ Cannot verify website (no bucket or endpoint)${NC}"
+    TASK3_VERIFY_SCORE=0
+fi
+
+echo -e "${YELLOW}Score: $TASK3_VERIFY_SCORE / 5${NC}"
+echo ""
+
+TASK3_SCORE=$((TASK3_BUCKET_SCORE + TASK3_HOSTING_SCORE + TASK3_INDEX_SCORE + TASK3_POLICY_SCORE + TASK3_VERIFY_SCORE))
+echo -e "${BLUE}>>> TASK 3 TOTAL: $TASK3_SCORE / 25${NC}"
+echo ""
+echo ""
+
+# ============================================
+# TASK 4: Database Integration using RDS MySQL (25 marks)
+# ============================================
+echo -e "${BLUE}### TASK 4: Database Integration using RDS MySQL (25 marks) ###${NC}"
+echo ""
+
+# Criteria 1: RDS instance created (5 marks)
+echo "Criteria 1: RDS Instance Created (5 marks)"
+echo "-------------------------------------------"
+
+RDS_NAME="rds-${STUDENT_NAME}"
+echo "Checking for RDS instance: $RDS_NAME"
+
+RDS_DATA=$(aws rds describe-db-instances --db-instance-identifier "$RDS_NAME" 2>/dev/null)
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ RDS instance found${NC}"
+    
+    ENGINE=$(echo "$RDS_DATA" | jq -r '.DBInstances[0].Engine')
+    INSTANCE_CLASS=$(echo "$RDS_DATA" | jq -r '.DBInstances[0].DBInstanceClass')
+    RDS_STATUS=$(echo "$RDS_DATA" | jq -r '.DBInstances[0].DBInstanceStatus')
+    RDS_ENDPOINT=$(echo "$RDS_DATA" | jq -r '.DBInstances[0].Endpoint.Address // empty')
+    
+    echo "  Engine: $ENGINE"
+    echo "  Instance Class: $INSTANCE_CLASS"
+    echo "  Status: $RDS_STATUS"
+    
+    if [ "$ENGINE" == "mysql" ] && [ "$INSTANCE_CLASS" == "db.t3.medium" ]; then
+        echo -e "${GREEN}✓ Correct configuration (MySQL, db.t3.medium)${NC}"
+        TASK4_RDS_SCORE=5
+    elif [ "$ENGINE" == "mysql" ] || [ "$INSTANCE_CLASS" == "db.t3.medium" ]; then
+        echo -e "${YELLOW}⚠ Minor configuration issue (engine or instance class incorrect)${NC}"
+        TASK4_RDS_SCORE=3
+    else
+        echo -e "${YELLOW}⚠ RDS exists but configuration issues${NC}"
+        TASK4_RDS_SCORE=3
+    fi
+else
+    echo -e "${RED}✗ No RDS instance found${NC}"
+    TASK4_RDS_SCORE=0
+fi
+
+echo -e "${YELLOW}Score: $TASK4_RDS_SCORE / 5${NC}"
+echo ""
+
+# Criteria 2: Security group configured (5 marks)
+echo "Criteria 2: Security Group Configured (5 marks)"
+echo "------------------------------------------------"
+
+if [ $? -eq 0 ] && [ -n "$RDS_DATA" ]; then
+    VPC_SG=$(echo "$RDS_DATA" | jq -r '.DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId // empty')
+    
+    if [ -n "$VPC_SG" ]; then
+        echo -e "${GREEN}✓ Security group attached: $VPC_SG${NC}"
+        
+        # Check for MySQL port 3306 inbound rule
+        SG_RULES=$(aws ec2 describe-security-groups --group-ids "$VPC_SG" --query 'SecurityGroups[0].IpPermissions' 2>/dev/null)
+        
+        HAS_3306=false
+        PROPER_SOURCE=false
+        
+        # Check if port 3306 is allowed
+        if echo "$SG_RULES" | jq -e '.[] | select(.FromPort == 3306 and .ToPort == 3306)' > /dev/null 2>&1; then
+            HAS_3306=true
+            echo -e "${GREEN}✓ Inbound rule allows MySQL port 3306${NC}"
+            
+            # Check source (should be from EC2 security group or limited CIDR, not 0.0.0.0/0)
+            SOURCES=$(echo "$SG_RULES" | jq -r '.[] | select(.FromPort == 3306) | .IpRanges[]?.CidrIp // .UserIdGroupPairs[]?.GroupId // empty')
+            
+            if echo "$SOURCES" | grep -q "sg-"; then
+                echo -e "${GREEN}✓ Source restricted to security group (EC2)${NC}"
+                PROPER_SOURCE=true
+                TASK4_SG_SCORE=5
+            elif echo "$SOURCES" | grep -v "0.0.0.0/0" > /dev/null; then
+                echo -e "${GREEN}✓ Source restricted to specific CIDR${NC}"
+                PROPER_SOURCE=true
+                TASK4_SG_SCORE=5
+            else
+                echo -e "${YELLOW}⚠ Port 3306 open but source not properly restricted (may be 0.0.0.0/0)${NC}"
+                TASK4_SG_SCORE=3
+            fi
+        else
+            echo -e "${RED}✗ No inbound rule for MySQL port 3306${NC}"
+            TASK4_SG_SCORE=0
+        fi
+    else
+        echo -e "${RED}✗ No security group configured${NC}"
+        TASK4_SG_SCORE=0
+    fi
+else
+    echo -e "${RED}✗ Cannot check security group (no RDS)${NC}"
+    TASK4_SG_SCORE=0
+fi
+
+echo -e "${YELLOW}Score: $TASK4_SG_SCORE / 5${NC}"
+echo ""
+
+# Criteria 3: EC2 successfully connects to RDS (10 marks)
+echo "Criteria 3: EC2 Successfully Connects to RDS (10 marks)"
+echo "--------------------------------------------------------"
+echo -e "${YELLOW}NOTE: This criterion requires manual verification or student screenshot${NC}"
+echo -e "${YELLOW}      Automated testing requires SSH access to EC2 instance${NC}"
+echo ""
+echo "  To manually verify:"
+echo "  1. SSH into EC2 instance"
+echo "  2. Run: mysql -h <RDS-endpoint> -u admin -p"
+echo "  3. Enter password: admin12345"
+echo "  4. Create test database and verify"
+echo ""
+
+if [ -n "$RDS_ENDPOINT" ]; then
+    echo -e "${GREEN}✓ RDS endpoint available: $RDS_ENDPOINT${NC}"
+    echo -e "${YELLOW}⚠ Auto-grade: Assuming connection needs manual verification${NC}"
+    echo -e "${YELLOW}  Award 10 marks if screenshot shows successful connection${NC}"
+    echo -e "${YELLOW}  Award 7 marks if connection works but minor errors${NC}"
+    echo -e "${YELLOW}  Award 4 marks if connection attempted but failed${NC}"
+    echo -e "${YELLOW}  Award 0 marks if no connection attempted${NC}"
+    TASK4_CONNECT_SCORE=0  # Set to 0, instructor must verify manually
+else
+    echo -e "${RED}✗ No RDS endpoint available${NC}"
+    TASK4_CONNECT_SCORE=0
+fi
+
+echo -e "${YELLOW}Score: $TASK4_CONNECT_SCORE / 10 (MANUAL VERIFICATION REQUIRED)${NC}"
+echo ""
+
+# Criteria 4: SQL query results verified (5 marks)
+echo "Criteria 4: SQL Query Results Verified (5 marks)"
+echo "-------------------------------------------------"
+echo -e "${YELLOW}NOTE: This criterion requires manual verification or student screenshot${NC}"
+echo ""
+echo "  To manually verify:"
+echo "  1. Check if student created testdb"
+echo "  2. Verify SHOW DATABASES output in screenshot"
+echo ""
+echo -e "${YELLOW}  Award 5 marks if SQL queries executed successfully${NC}"
+echo -e "${YELLOW}  Award 3 marks if queries executed but incomplete/partial${NC}"
+echo -e "${YELLOW}  Award 0 marks if queries not executed${NC}"
+
+TASK4_SQL_SCORE=0  # Set to 0, instructor must verify manually
+
+echo -e "${YELLOW}Score: $TASK4_SQL_SCORE / 5 (MANUAL VERIFICATION REQUIRED)${NC}"
+echo ""
+
+TASK4_SCORE=$((TASK4_RDS_SCORE + TASK4_SG_SCORE + TASK4_CONNECT_SCORE + TASK4_SQL_SCORE))
+echo -e "${BLUE}>>> TASK 4 TOTAL: $TASK4_SCORE / 25 (15 marks auto, 10 marks manual)${NC}"
+echo ""
+echo ""
+
+# ============================================
+# FINAL REPORT
+# ============================================
+TOTAL_SCORE=$((TASK1_SCORE + TASK2_SCORE + TASK3_SCORE + TASK4_SCORE))
+
+echo "=========================================="
+echo "        FINAL GRADING SUMMARY"
+echo "=========================================="
+echo ""
+echo "Student: $STUDENT_NAME"
+echo "Grading completed: $(date)"
+echo ""
+echo "=========================================="
+echo "DETAILED BREAKDOWN"
+echo "=========================================="
+echo ""
+echo "TASK 1: EC2 Dynamic Web Server (25 marks)"
+echo "  - EC2 Instance Launched:      $TASK1_EC2_SCORE / 10"
+echo "  - Instance Type:              $TASK1_TYPE_SCORE / 5"
+echo "  - User Data Script:           $TASK1_USERDATA_SCORE / 10"
+echo "  TASK 1 SUBTOTAL:              $TASK1_SCORE / 25"
+echo ""
+echo "TASK 2: Auto Scaling & ALB (25 marks)"
+echo "  - ALB Exists:                 $TASK2_ALB_SCORE / 5"
+echo "  - Target Group & Healthy:     $TASK2_TG_SCORE / 5"
+echo "  - ASG Exists & Linked:        $TASK2_ASG_SCORE / 5"
+echo "  - ASG Scaling Config:         $TASK2_CONFIG_SCORE / 5"
+echo "  - Web Page via ALB DNS:       $TASK2_ACCESS_SCORE / 5"
+echo "  TASK 2 SUBTOTAL:              $TASK2_SCORE / 25"
+echo ""
+echo "TASK 3: S3 Static Website (25 marks)"
+echo "  - S3 Bucket Exists:           $TASK3_BUCKET_SCORE / 5"
+echo "  - Static Hosting Enabled:     $TASK3_HOSTING_SCORE / 5"
+echo "  - index.html with Name:       $TASK3_INDEX_SCORE / 5"
+echo "  - Public Read Permission:     $TASK3_POLICY_SCORE / 5"
+echo "  - Website Verified:           $TASK3_VERIFY_SCORE / 5"
+echo "  TASK 3 SUBTOTAL:              $TASK3_SCORE / 25"
+echo ""
+echo "TASK 4: RDS MySQL Database (25 marks)"
+echo "  - RDS Instance Created:       $TASK4_RDS_SCORE / 5"
+echo "  - Security Group Config:      $TASK4_SG_SCORE / 5"
+echo "  - EC2 Connects to RDS:        $TASK4_CONNECT_SCORE / 10 *MANUAL*"
+echo "  - SQL Query Results:          $TASK4_SQL_SCORE / 5 *MANUAL*"
+echo "  TASK 4 SUBTOTAL:              $TASK4_SCORE / 25"
+echo ""
+echo "=========================================="
+echo -e "${BLUE}TOTAL SCORE: $TOTAL_SCORE / 100${NC}"
+echo "=========================================="
+echo ""
+
+# Calculate percentage and grade
+PERCENTAGE=$((TOTAL_SCORE * 100 / MAX_SCORE))
+echo "Percentage: $PERCENTAGE%"
+
+if [ $PERCENTAGE -ge 85 ]; then
+    GRADE="A"
+elif [ $PERCENTAGE -ge 75 ]; then
+    GRADE="B+"
+elif [ $PERCENTAGE -ge 70 ]; then
+    GRADE="B"
+elif [ $PERCENTAGE -ge 65 ]; then
+    GRADE="C+"
+elif [ $PERCENTAGE -ge 60 ]; then
+    GRADE="C"
+elif [ $PERCENTAGE -ge 50 ]; then
+    GRADE="D"
+else
+    GRADE="F"
+fi
+
+echo "Estimated Grade: $GRADE"
+echo ""
+echo -e "${YELLOW}IMPORTANT NOTES:${NC}"
+echo "• Task 4 requires manual verification (15 marks auto-graded, 10 manual)"
+echo "• Please review screenshots for EC2-RDS connection and SQL queries"
+echo "• Add manual scores to this total for final grade"
+echo ""
+echo "=========================================="
+
+# Save detailed report
+REPORT_FILE="BMIT3273_grade_${STUDENT_NAME}_$(date +%Y%m%d_%H%M%S).txt"
+{
+    echo "=========================================="
+    echo "BMIT3273 CLOUD COMPUTING - GRADING REPORT"
+    echo "Based on Official Marking Scheme 202509"
+    echo "=========================================="
+    echo ""
+    echo "Student Name: $STUDENT_NAME"
+    echo "Grading Date: $(date)"
+    echo ""
+    echo "=========================================="
+    echo "DETAILED BREAKDOWN"
+    echo "=========================================="
+    echo ""
+    echo "TASK 1: EC2 Dynamic Web Server (25 marks)"
+    echo "  - EC2 Instance Launched:      $TASK1_EC2_SCORE / 10"
+    echo "  - Instance Type:              $TASK1_TYPE_SCORE / 5"
+    echo "  - User Data Script:           $TASK1_USERDATA_SCORE / 10"
+    echo "  TASK 1 SUBTOTAL:              $TASK1_SCORE / 25"
+    echo ""
+    echo "TASK 2: Auto Scaling & ALB (25 marks)"
+    echo "  - ALB Exists:                 $TASK2_ALB_SCORE / 5"
+    echo "  - Target Group & Healthy:     $TASK2_TG_SCORE / 5"
+    echo "  - ASG Exists & Linked:        $TASK2_ASG_SCORE / 5"
+    echo "  - ASG Scaling Config:         $TASK2_CONFIG_SCORE / 5"
+    echo "  - Web Page via ALB DNS:       $TASK2_ACCESS_SCORE / 5"
+    echo "  TASK 2 SUBTOTAL:              $TASK2_SCORE / 25"
+    echo ""
+    echo "TASK 3: S3 Static Website (25 marks)"
+    echo "  - S3 Bucket Exists:           $TASK3_BUCKET_SCORE / 5"
+    echo "  - Static Hosting Enabled:     $TASK3_HOSTING_SCORE / 5"
+    echo "  - index.html with Name:       $TASK3_INDEX_SCORE / 5"
+    echo "  - Public Read Permission:     $TASK3_POLICY_SCORE / 5"
+    echo "  - Website Verified:           $TASK3_VERIFY_SCORE / 5"
+    echo "  TASK 3 SUBTOTAL:              $TASK3_SCORE / 25"
+    echo ""
+    echo "TASK 4: RDS MySQL Database (25 marks)"
+    echo "  - RDS Instance Created:       $TASK4_RDS_SCORE / 5"
+    echo "  - Security Group Config:      $TASK4_SG_SCORE / 5"
+    echo "  - EC2 Connects to RDS:        $TASK4_CONNECT_SCORE / 10 *MANUAL*"
+    echo "  - SQL Query Results:          $TASK4_SQL_SCORE / 5 *MANUAL*"
+    echo "  TASK 4 SUBTOTAL:              $TASK4_SCORE / 25"
+    echo ""
+    echo "=========================================="
+    echo "AUTOMATED SCORE:  $TOTAL_SCORE / 100"
+    echo "Percentage: $PERCENTAGE%"
+    echo "Estimated Grade: $GRADE"
+    echo ""
+    echo "MANUAL VERIFICATION PENDING:"
+    echo "  - Task 4: EC2-RDS Connection (10 marks)"
+    echo "  - Task 4: SQL Query Results (5 marks)"
+    echo ""
+    echo "Final score after manual review: ____ / 100"
+    echo "=========================================="
+} > "$REPORT_FILE"
+
+echo ""
+echo "Report saved to: $REPORT_FILE"
+echo ""
+echo "To view the report:"
+echo "  cat $REPORT_FILE"
+echo ""
+echo "To download the report from CloudShell:"
+echo "  1. Click 'Actions' → 'Download file'"
+echo "  2. Enter path: $REPORT_FILE"
+echo ""
+echo "=========================================="|Welcome" > /dev/null 2>&1; then
             echo -e "${GREEN}✓ Web page shows student name${NC}"
             TASK2_ACCESS_SCORE=5
         else
