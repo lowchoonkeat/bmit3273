@@ -7,7 +7,7 @@
 
 echo "=========================================="
 echo "BMIT3273 Cloud Computing Auto-Grader"
-echo "Based on Official Marking Scheme 202509"
+echo "Based on Official Marking Scheme"
 echo "=========================================="
 echo ""
 
@@ -666,7 +666,7 @@ REPORT_FILE="BMIT3273_grade_${STUDENT_NAME}_$(date +%Y%m%d_%H%M%S).txt"
 {
     echo "=========================================="
     echo "BMIT3273 CLOUD COMPUTING - GRADING REPORT"
-    echo "Based on Official Marking Scheme 202509"
+    echo "Based on Official Marking Scheme"
     echo "=========================================="
     echo ""
     echo "Student Name: $STUDENT_NAME"
