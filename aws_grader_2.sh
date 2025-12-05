@@ -154,15 +154,13 @@ def main():
     except Exception as e:
         print(f"Error Task 3: {e}")
 
-    # --- TASK 4: RDS (25 MARKS) ---
+    # --- TASK 4: RDS (25 MARKS - HEAVY WEIGHT ON EVIDENCE) ---
     print_header("Task 4: RDS MySQL & Connection Evidence")
     try:
         dbs = rds.describe_db_instances()['DBInstances']
         
-        # 1. Look for CORRECT Name
+        # 1. Look for CORRECT Name or Backup Name
         target_rds = next((d for d in dbs if "rds-" in d['DBInstanceIdentifier']), None)
-        
-        # 2. Look for WRONG Name (database-1) if correct one not found
         using_default_name = False
         if not target_rds:
             target_rds = next((d for d in dbs if d['DBInstanceIdentifier'] == "database-1"), None)
@@ -170,26 +168,24 @@ def main():
                 using_default_name = True
 
         if target_rds:
-            # CHECK 1: RDS CREATION + SPECS (5 Marks Total)
+            # CHECK 1: RDS CONFIGURATION (5 Marks)
+            # Combines Naming, Specs, and Initial DB into one check
             inst_type = target_rds['DBInstanceClass']
             storage = target_rds['AllocatedStorage']
-            spec_pass = (inst_type == 'db.t4g.micro' and storage == 30)
-            
-            if not using_default_name and spec_pass:
-                grade_step("RDS Created & Specs Correct", 5, True)
-            elif using_default_name:
-                grade_step("RDS Created & Specs Correct", 5, False, "Penalty: Used 'database-1' instead of 'rds-<name>'")
-            else:
-                grade_step("RDS Created & Specs Correct", 5, False, f"Wrong Specs: {inst_type} / {storage}GB")
-
-            # CHECK 2: Initial DB 'firstdb' (5 Marks)
             db_name = target_rds.get('DBName', '')
-            if db_name == 'firstdb':
-                grade_step("Initial DB 'firstdb' Created", 5, True)
+            
+            config_errors = []
+            if using_default_name: config_errors.append("Wrong Name")
+            if inst_type != 'db.t4g.micro': config_errors.append(f"Wrong Type ({inst_type})")
+            if storage != 30: config_errors.append(f"Wrong Storage ({storage}GB)")
+            if db_name != 'firstdb': config_errors.append(f"Wrong Initial DB ({db_name})")
+            
+            if not config_errors:
+                grade_step("RDS Config (Specs, Name, InitialDB)", 5, True)
             else:
-                grade_step("Initial DB 'firstdb' Created", 5, False, f"Found DBName: '{db_name}'")
+                grade_step("RDS Config (Specs, Name, InitialDB)", 5, False, f"Issues: {', '.join(config_errors)}")
 
-            # CHECK 3: Security Group (5 Marks)
+            # CHECK 2: Security Group (5 Marks)
             vpc_sgs = target_rds['VpcSecurityGroups']
             secure = False
             details = "No SG found"
@@ -218,7 +214,7 @@ def main():
 
             grade_step("Security Group (Restricted to EC2)", 5, secure, details)
 
-            # CHECK 4: EVIDENCE CHECK (10 Marks)
+            # CHECK 3: EVIDENCE CHECK (15 Marks - High Value)
             print("    Checking S3 for evidence file 'db_results.txt'...")
             evidence_passed = False
             evidence_details = "File not found or content missing"
@@ -234,14 +230,12 @@ def main():
                 except Exception as e:
                     evidence_details = f"Could not read 'db_results.txt' from bucket"
             
-            grade_step("Evidence: Connection & 'testdb' creation", 10, evidence_passed, evidence_details)
+            grade_step("Evidence: Connection & SQL Execution", 15, evidence_passed, evidence_details)
 
         else:
-            # If NEITHER is found
-            grade_step("RDS Created & Specs Correct", 5, False, "No 'rds-*' or 'database-1' found")
-            grade_step("Initial DB 'firstdb' Created", 5, False)
-            grade_step("Security Group (Restricted)", 5, False)
-            grade_step("Evidence: Connection & 'testdb'", 10, False)
+            grade_step("RDS Config (Specs, Name, InitialDB)", 5, False, "No Database Found")
+            grade_step("Security Group (Restricted to EC2)", 5, False)
+            grade_step("Evidence: Connection & SQL Execution", 15, False)
 
     except Exception as e:
         print(f"Error checking RDS: {e}")
