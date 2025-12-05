@@ -80,8 +80,7 @@ def main():
             grade_step("Instance Type is t3.medium", 5, False)
             grade_step("User Data Script configured", 10, False)
 
-        # 4. Check Security Group 'web-access' (5 Marks - NEW)
-        # We look for a security group specifically named 'web-access' as per instructions
+        # 4. Check Security Group 'web-access' (5 Marks)
         sgs = ec2.describe_security_groups()['SecurityGroups']
         web_sg = next((sg for sg in sgs if sg['GroupName'] == 'web-access'), None)
         
@@ -91,20 +90,13 @@ def main():
             has_http = False
             
             for p in perms:
-                # Check for Port 22 (SSH)
-                if p.get('FromPort') == 22 or p.get('IpProtocol') == '-1':
-                    has_ssh = True
-                # Check for Port 80 (HTTP)
-                if p.get('FromPort') == 80 or p.get('IpProtocol') == '-1':
-                    has_http = True
+                if p.get('FromPort') == 22 or p.get('IpProtocol') == '-1': has_ssh = True
+                if p.get('FromPort') == 80 or p.get('IpProtocol') == '-1': has_http = True
             
             if has_ssh and has_http:
                 grade_step("SG 'web-access' allows SSH & HTTP", 5, True)
             else:
-                missing = []
-                if not has_ssh: missing.append("SSH (22)")
-                if not has_http: missing.append("HTTP (80)")
-                grade_step("SG 'web-access' allows SSH & HTTP", 5, False, f"Missing ports: {', '.join(missing)}")
+                grade_step("SG 'web-access' allows SSH & HTTP", 5, False, f"Missing ports (SSH:{has_ssh}, HTTP:{has_http})")
         else:
             grade_step("SG 'web-access' allows SSH & HTTP", 5, False, "Security Group 'web-access' not found")
 
@@ -190,7 +182,7 @@ def main():
     except Exception as e:
         print(f"Error Task 3: {e}")
 
-    # --- TASK 4: RDS (25 MARKS - HEAVY WEIGHT ON EVIDENCE) ---
+    # --- TASK 4: RDS (25 MARKS) ---
     print_header("Task 4: RDS MySQL & Connection Evidence")
     try:
         dbs = rds.describe_db_instances()['DBInstances']
@@ -236,10 +228,8 @@ def main():
                     if p.get('FromPort') == 3306 or p.get('IpProtocol') == '-1':
                         has_3306 = True
                         for r in p.get('IpRanges', []):
-                            if r.get('CidrIp') == '0.0.0.0/0':
-                                is_public = True
-                        if p.get('UserIdGroupPairs'):
-                            uses_sg_ref = True
+                            if r.get('CidrIp') == '0.0.0.0/0': is_public = True
+                        if p.get('UserIdGroupPairs'): uses_sg_ref = True
                 
                 if has_3306 and not is_public and uses_sg_ref:
                     secure = True
@@ -248,28 +238,40 @@ def main():
 
             grade_step("Security Group (Restricted to EC2)", 5, secure, details)
 
-            # CHECK 3: EVIDENCE CHECK (15 Marks)
+            # CHECK 3 & 4: SPLIT EVIDENCE CHECK (10 + 5 Marks)
             print("    Checking S3 for evidence file 'db_results.txt'...")
-            evidence_passed = False
-            evidence_details = "File not found or content missing"
+            
+            file_found = False
+            has_firstdb = False
+            has_testdb = False
             
             if target_bucket_name:
                 try:
                     file_obj = s3.get_object(Bucket=target_bucket_name, Key='db_results.txt')
                     file_content = file_obj['Body'].read().decode('utf-8')
-                    if "firstdb" in file_content and "testdb" in file_content:
-                        evidence_passed = True
-                    else:
-                        evidence_details = "File found, but missing 'firstdb' or 'testdb'"
-                except Exception as e:
-                    evidence_details = f"Could not read 'db_results.txt' from bucket"
+                    file_found = True
+                    if "firstdb" in file_content: has_firstdb = True
+                    if "testdb" in file_content: has_testdb = True
+                except:
+                    pass
             
-            grade_step("Evidence: Connection & SQL Execution", 15, evidence_passed, evidence_details)
+            # Sub-Check A: File Exists + Connected (10 Marks)
+            if file_found and has_firstdb:
+                grade_step("Evidence: Connection Successful (File found)", 10, True)
+            else:
+                grade_step("Evidence: Connection Successful (File found)", 10, False, "File missing or 'firstdb' not in list")
+
+            # Sub-Check B: Manual Task (5 Marks)
+            if file_found and has_testdb:
+                grade_step("Evidence: Manual 'testdb' Created", 5, True)
+            else:
+                grade_step("Evidence: Manual 'testdb' Created", 5, False, "'testdb' missing from list")
 
         else:
             grade_step("RDS Config (Specs, Name, InitialDB)", 5, False, "No Database Found")
             grade_step("Security Group (Restricted to EC2)", 5, False)
-            grade_step("Evidence: Connection & SQL Execution", 15, False)
+            grade_step("Evidence: Connection Successful", 10, False)
+            grade_step("Evidence: Manual 'testdb' Created", 5, False)
 
     except Exception as e:
         print(f"Error checking RDS: {e}")
