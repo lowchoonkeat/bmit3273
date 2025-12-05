@@ -56,22 +56,58 @@ def main():
     s3 = boto3.client('s3')
     rds = boto3.client('rds')
 
-    # --- TASK 1: EC2 (25 MARKS) ---
-    print_header("Task 1: EC2 & Launch Template")
+    # --- TASK 1: EC2 & SECURITY (25 MARKS) ---
+    print_header("Task 1: EC2, Launch Template & Security")
     try:
+        # 1. Check Launch Template (5 Marks)
         lts = ec2.describe_launch_templates()['LaunchTemplates']
         target_lt = next((lt for lt in lts if "lt-" in lt['LaunchTemplateName']), None)
+        lt_found = False
         if target_lt:
+            lt_found = True
             lt_id = target_lt['LaunchTemplateId']
-            grade_step("Launch Template created", 10, True)
+            grade_step("Launch Template created", 5, True)
+            
+            # 2. Check Instance Type (5 Marks)
             lt_ver = ec2.describe_launch_template_versions(LaunchTemplateId=lt_id)['LaunchTemplateVersions'][0]
             instance_type = lt_ver['LaunchTemplateData'].get('InstanceType', 'Unknown')
             grade_step("Instance Type is t3.medium", 5, instance_type == 't3.medium')
+            
+            # 3. Check User Data (10 Marks)
             grade_step("User Data Script configured", 10, 'UserData' in lt_ver['LaunchTemplateData'])
         else:
-            grade_step("Launch Template created", 10, False)
+            grade_step("Launch Template created", 5, False)
             grade_step("Instance Type is t3.medium", 5, False)
             grade_step("User Data Script configured", 10, False)
+
+        # 4. Check Security Group 'web-access' (5 Marks - NEW)
+        # We look for a security group specifically named 'web-access' as per instructions
+        sgs = ec2.describe_security_groups()['SecurityGroups']
+        web_sg = next((sg for sg in sgs if sg['GroupName'] == 'web-access'), None)
+        
+        if web_sg:
+            perms = web_sg['IpPermissions']
+            has_ssh = False
+            has_http = False
+            
+            for p in perms:
+                # Check for Port 22 (SSH)
+                if p.get('FromPort') == 22 or p.get('IpProtocol') == '-1':
+                    has_ssh = True
+                # Check for Port 80 (HTTP)
+                if p.get('FromPort') == 80 or p.get('IpProtocol') == '-1':
+                    has_http = True
+            
+            if has_ssh and has_http:
+                grade_step("SG 'web-access' allows SSH & HTTP", 5, True)
+            else:
+                missing = []
+                if not has_ssh: missing.append("SSH (22)")
+                if not has_http: missing.append("HTTP (80)")
+                grade_step("SG 'web-access' allows SSH & HTTP", 5, False, f"Missing ports: {', '.join(missing)}")
+        else:
+            grade_step("SG 'web-access' allows SSH & HTTP", 5, False, "Security Group 'web-access' not found")
+
     except Exception as e:
         print(f"Error Task 1: {e}")
 
@@ -159,7 +195,6 @@ def main():
     try:
         dbs = rds.describe_db_instances()['DBInstances']
         
-        # 1. Look for CORRECT Name or Backup Name
         target_rds = next((d for d in dbs if "rds-" in d['DBInstanceIdentifier']), None)
         using_default_name = False
         if not target_rds:
@@ -169,7 +204,6 @@ def main():
 
         if target_rds:
             # CHECK 1: RDS CONFIGURATION (5 Marks)
-            # Combines Naming, Specs, and Initial DB into one check
             inst_type = target_rds['DBInstanceClass']
             storage = target_rds['AllocatedStorage']
             db_name = target_rds.get('DBName', '')
@@ -214,7 +248,7 @@ def main():
 
             grade_step("Security Group (Restricted to EC2)", 5, secure, details)
 
-            # CHECK 3: EVIDENCE CHECK (15 Marks - High Value)
+            # CHECK 3: EVIDENCE CHECK (15 Marks)
             print("    Checking S3 for evidence file 'db_results.txt'...")
             evidence_passed = False
             evidence_details = "File not found or content missing"
