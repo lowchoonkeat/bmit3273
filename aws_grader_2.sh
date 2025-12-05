@@ -154,17 +154,29 @@ def main():
     except Exception as e:
         print(f"Error Task 3: {e}")
 
-    # --- TASK 4: RDS (UPDATED: Allows 'database-1') ---
+    # --- TASK 4: RDS (UPDATED: Penalty Logic) ---
     print_header("Task 4: RDS MySQL & Connection Evidence")
     try:
         dbs = rds.describe_db_instances()['DBInstances']
         
-        # LOGIC CHANGE: Look for 'rds-' OR 'database-1'
-        target_rds = next((d for d in dbs if "rds-" in d['DBInstanceIdentifier'] or d['DBInstanceIdentifier'] == "database-1"), None)
+        # 1. Look for CORRECT Name
+        target_rds = next((d for d in dbs if "rds-" in d['DBInstanceIdentifier']), None)
         
+        # 2. Look for WRONG Name (database-1) if correct one not found
+        using_default_name = False
+        if not target_rds:
+            target_rds = next((d for d in dbs if d['DBInstanceIdentifier'] == "database-1"), None)
+            if target_rds:
+                using_default_name = True
+
         if target_rds:
-            # We found it!
-            grade_step("RDS Instance Created", 5, True, f"Found: {target_rds['DBInstanceIdentifier']}")
+            # GRADE THE NAMING/CREATION
+            if using_default_name:
+                grade_step("RDS Instance Created (Naming Check)", 5, False, "Penalty: Used 'database-1' instead of 'rds-<name>'")
+            else:
+                grade_step("RDS Instance Created (Naming Check)", 5, True)
+            
+            # GRADE THE REST (Specs, DB, SG, Evidence)
             
             # 1. Hardware Specs (db.t4g.micro & 30GB)
             inst_type = target_rds['DBInstanceClass']
@@ -182,7 +194,7 @@ def main():
             else:
                 grade_step("Initial DB 'firstdb' Created", 5, False, f"Found DBName: '{db_name}'")
 
-            # 3. Security Group (Check for EC2 reference or missing 0.0.0.0)
+            # 3. Security Group
             vpc_sgs = target_rds['VpcSecurityGroups']
             secure = False
             details = "No SG found"
@@ -230,7 +242,8 @@ def main():
             grade_step("Evidence: Connection & 'testdb' creation", 10, evidence_passed, evidence_details)
 
         else:
-            grade_step("RDS Instance Created", 5, False, "Could not find 'rds-*' or 'database-1'")
+            # If NEITHER is found
+            grade_step("RDS Instance Created", 5, False, "No 'rds-*' or 'database-1' found")
             grade_step("Specs (t4g.micro / 30GB)", 5, False)
             grade_step("Initial DB 'firstdb' Created", 5, False)
             grade_step("Security Group (Restricted)", 5, False)
