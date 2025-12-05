@@ -154,14 +154,17 @@ def main():
     except Exception as e:
         print(f"Error Task 3: {e}")
 
-    # --- TASK 4: RDS (UPDATED HARDER) ---
+    # --- TASK 4: RDS (UPDATED: Allows 'database-1') ---
     print_header("Task 4: RDS MySQL & Connection Evidence")
     try:
         dbs = rds.describe_db_instances()['DBInstances']
-        target_rds = next((d for d in dbs if "rds-" in d['DBInstanceIdentifier']), None)
+        
+        # LOGIC CHANGE: Look for 'rds-' OR 'database-1'
+        target_rds = next((d for d in dbs if "rds-" in d['DBInstanceIdentifier'] or d['DBInstanceIdentifier'] == "database-1"), None)
         
         if target_rds:
-            grade_step("RDS Instance Created", 5, True)
+            # We found it!
+            grade_step("RDS Instance Created", 5, True, f"Found: {target_rds['DBInstanceIdentifier']}")
             
             # 1. Hardware Specs (db.t4g.micro & 30GB)
             inst_type = target_rds['DBInstanceClass']
@@ -195,11 +198,9 @@ def main():
                 for p in perms:
                     if p.get('FromPort') == 3306 or p.get('IpProtocol') == '-1':
                         has_3306 = True
-                        # Check IP Ranges
                         for r in p.get('IpRanges', []):
                             if r.get('CidrIp') == '0.0.0.0/0':
                                 is_public = True
-                        # Check User Group Pairs (SG References)
                         if p.get('UserIdGroupPairs'):
                             uses_sg_ref = True
                 
@@ -210,30 +211,26 @@ def main():
 
             grade_step("Security Group (Restricted to EC2)", 5, secure, details)
 
-            # 4. EVIDENCE CHECK (The S3 File)
-            # We need to find the file db_results.txt in their bucket
+            # 4. EVIDENCE CHECK
             print("    Checking S3 for evidence file 'db_results.txt'...")
             evidence_passed = False
             evidence_details = "File not found or content missing"
             
             if target_bucket_name:
                 try:
-                    # Read file directly from S3 memory
                     file_obj = s3.get_object(Bucket=target_bucket_name, Key='db_results.txt')
                     file_content = file_obj['Body'].read().decode('utf-8')
-                    
                     if "firstdb" in file_content and "testdb" in file_content:
                         evidence_passed = True
                     else:
                         evidence_details = "File found, but missing 'firstdb' or 'testdb'"
-                        print(f"    [DEBUG] File Content:\n{file_content}")
                 except Exception as e:
                     evidence_details = f"Could not read 'db_results.txt' from bucket"
             
             grade_step("Evidence: Connection & 'testdb' creation", 10, evidence_passed, evidence_details)
 
         else:
-            grade_step("RDS Instance Created", 5, False)
+            grade_step("RDS Instance Created", 5, False, "Could not find 'rds-*' or 'database-1'")
             grade_step("Specs (t4g.micro / 30GB)", 5, False)
             grade_step("Initial DB 'firstdb' Created", 5, False)
             grade_step("Security Group (Restricted)", 5, False)
