@@ -16,9 +16,6 @@ def print_header(title):
     print(f"{'='*60}")
 
 def grade_step(description, points, condition, details=""):
-    """
-    Logs points for granular checks. 
-    """
     global TOTAL_MARKS, SCORED_MARKS
     TOTAL_MARKS += points
     if condition:
@@ -43,7 +40,7 @@ def check_http_content(url, keyword):
     return False, "Unknown error"
 
 def main():
-    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (PARTIAL MARKS)")
+    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (FINAL)")
     
     session = boto3.session.Session()
     region = session.region_name
@@ -64,7 +61,6 @@ def main():
     # =========================================================
     print_header("Task 1: EC2 & Security")
     
-    # 1. Launch Template Existence (5 Marks)
     try:
         lts = ec2.describe_launch_templates()['LaunchTemplates']
         target_lt = next((lt for lt in lts if "lt-" in lt['LaunchTemplateName']), None)
@@ -77,21 +73,15 @@ def main():
         else:
             grade_step("Launch Template Found", 5, False, "Missing 'lt-*'")
 
-        # 2. Instance Type (5 Marks)
         if lt_ver:
             itype = lt_ver['LaunchTemplateData'].get('InstanceType', 'Unknown')
             grade_step("Instance Type is t3.medium", 5, itype == 't3.medium', f"Found: {itype}")
-        else:
-            grade_step("Instance Type is t3.medium", 5, False, "No LT to check")
-
-        # 3. User Data (10 Marks)
-        if lt_ver:
             has_ud = 'UserData' in lt_ver['LaunchTemplateData']
             grade_step("User Data Script Configured", 10, has_ud)
         else:
+            grade_step("Instance Type is t3.medium", 5, False, "No LT to check")
             grade_step("User Data Script Configured", 10, False)
 
-        # 4. Security Group - PARTIAL MARKS (2 for SSH, 3 for HTTP)
         sgs = ec2.describe_security_groups()['SecurityGroups']
         web_sg = next((sg for sg in sgs if sg['GroupName'] == 'web-access'), None)
         
@@ -119,7 +109,7 @@ def main():
     
     alb_dns = None
     try:
-        # 1. ALB Checks - PARTIAL MARKS (2 Created, 3 Internet Facing)
+        # ALB (5 Marks)
         albs = elbv2.describe_load_balancers()['LoadBalancers']
         target_alb = next((alb for alb in albs if "alb-" in alb['LoadBalancerName']), None)
         
@@ -131,7 +121,7 @@ def main():
             grade_step("ALB Created", 2, False)
             grade_step("ALB Internet-Facing", 3, False)
 
-        # 2. Target Group - PARTIAL MARKS (2 Created, 3 Healthy)
+        # Target Group (5 Marks)
         tgs = elbv2.describe_target_groups()['TargetGroups']
         target_tg = next((tg for tg in tgs if "tg-" in tg['TargetGroupName']), None)
         
@@ -144,19 +134,19 @@ def main():
             grade_step("Target Group Created", 2, False)
             grade_step("Targets Registered & Healthy", 3, False)
 
-        # 3. ASG - PARTIAL MARKS (2 Created, 3 Config)
+        # ASG (10 MARKS - RESTORED VALUE)
         asgs = asg_client.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if "asg-" in a['AutoScalingGroupName']), None)
         
         if target_asg:
-            grade_step("ASG Created", 2, True)
+            grade_step("ASG Created", 5, True) # Restored to 5
             is_config_ok = (target_asg['MinSize']==1 and target_asg['MaxSize']==4)
-            grade_step("Scaling Config (1-2-4)", 3, is_config_ok, f"Found Min:{target_asg['MinSize']} Max:{target_asg['MaxSize']}")
+            grade_step("Scaling Config (1-2-4)", 5, is_config_ok, f"Found Min:{target_asg['MinSize']} Max:{target_asg['MaxSize']}") # Restored to 5
         else:
-            grade_step("ASG Created", 2, False)
-            grade_step("Scaling Config (1-2-4)", 3, False)
+            grade_step("ASG Created", 5, False)
+            grade_step("Scaling Config (1-2-4)", 5, False)
 
-        # 4. Web Access (5 Marks)
+        # Web Access (5 Marks)
         if alb_dns:
             print(f"    Testing ALB: http://{alb_dns}")
             success, msg = check_http_content(f"http://{alb_dns}", student_name_input)
@@ -180,15 +170,12 @@ def main():
             target_bucket_name = target_bucket['Name']
             grade_step("Bucket Created", 5, True)
             
-            # Hosting
             try:
                 s3.get_bucket_website(Bucket=target_bucket_name)
                 grade_step("Static Hosting Enabled", 5, True)
             except:
                 grade_step("Static Hosting Enabled", 5, False)
             
-            # Files - PARTIAL (2.5 each? Script uses int so 2 and 3)
-            # Let's do 2 for Index, 3 for Error/Others
             try:
                 objs = s3.list_objects_v2(Bucket=target_bucket_name)
                 files = [o['Key'] for o in objs.get('Contents', [])]
@@ -198,14 +185,12 @@ def main():
                  grade_step("File: index.html found", 2, False)
                  grade_step("File: error.html found", 3, False)
 
-            # Policy
             try:
                 pol = s3.get_bucket_policy(Bucket=target_bucket_name)
                 grade_step("Bucket Policy (Public)", 5, "Allow" in pol['Policy'])
             except:
                 grade_step("Bucket Policy (Public)", 5, False)
 
-            # Verify
             s3_url = f"http://{target_bucket_name}.s3-website-{region}.amazonaws.com"
             success, msg = check_http_content(s3_url, student_name_input)
             grade_step("Website Verified in Browser", 5, success, msg)
@@ -221,7 +206,7 @@ def main():
         print(f"Error Task 3: {e}")
 
     # =========================================================
-    # TASK 4: RDS (25 MARKS - PARTIAL)
+    # TASK 4: RDS (25 MARKS)
     # =========================================================
     print_header("Task 4: RDS & Evidence")
     try:
@@ -234,7 +219,6 @@ def main():
             if target_rds: using_default = True
 
         if target_rds:
-            # 1. Config Breakdown (5 Marks total)
             grade_step("RDS Name Correct", 1, not using_default, "Used 'database-1'")
             
             inst_type = target_rds['DBInstanceClass']
@@ -244,11 +228,9 @@ def main():
             db_name = target_rds.get('DBName', '')
             grade_step("Initial DB 'firstdb'", 2, db_name == 'firstdb', f"Found '{db_name}'")
 
-            # 2. Security Group Breakdown (5 Marks total)
             vpc_sgs = target_rds['VpcSecurityGroups']
             has_3306 = False
             is_secure = False
-            
             if vpc_sgs:
                 sg_id = vpc_sgs[0]['VpcSecurityGroupId']
                 sg_resp = ec2.describe_security_groups(GroupIds=[sg_id])
@@ -256,19 +238,16 @@ def main():
                 for p in perms:
                     if p.get('FromPort') == 3306 or p.get('IpProtocol') == '-1':
                         has_3306 = True
-                        # Check for 0.0.0.0/0
                         is_public = any(r.get('CidrIp') == '0.0.0.0/0' for r in p.get('IpRanges', []))
                         if not is_public: is_secure = True
             
             grade_step("RDS SG: Port 3306 Open", 2, has_3306)
             grade_step("RDS SG: No Public Access (0.0.0.0)", 3, is_secure and has_3306)
 
-            # 3. Evidence Breakdown (15 Marks total)
             print("    Checking S3 for evidence file...")
             file_found = False
             has_first = False
             has_test = False
-            
             if target_bucket_name:
                 try:
                     file_obj = s3.get_object(Bucket=target_bucket_name, Key='db_results.txt')
@@ -284,7 +263,6 @@ def main():
             grade_step("Evidence: Manual Task ('testdb' listed)", 5, has_test)
 
         else:
-            # RDS Not found - all fail
             grade_step("RDS Name Correct", 1, False)
             grade_step("RDS Specs (t4g.micro/30GB)", 2, False)
             grade_step("Initial DB 'firstdb'", 2, False)
@@ -297,7 +275,6 @@ def main():
     except Exception as e:
         print(f"Error Task 4: {e}")
 
-    # --- FINAL REPORT ---
     print_header("FINAL RESULT")
     print(f"TOTAL SCORE: {SCORED_MARKS} / 100")
 
