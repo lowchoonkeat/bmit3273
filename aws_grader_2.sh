@@ -15,14 +15,17 @@ def print_header(title):
     print(f" {title}")
     print(f"{'='*60}")
 
-def grade_step(description, max_points, condition, details=""):
+def grade_step(description, points, condition, details=""):
+    """
+    Logs points for granular checks. 
+    """
     global TOTAL_MARKS, SCORED_MARKS
-    TOTAL_MARKS += max_points
+    TOTAL_MARKS += points
     if condition:
-        SCORED_MARKS += max_points
-        print(f"[\u2713] PASS (+{max_points}): {description}")
+        SCORED_MARKS += points
+        print(f"[\u2713] PASS (+{points}): {description}")
     else:
-        print(f"[X] FAIL (0/{max_points}): {description}")
+        print(f"[X] FAIL (0/{points}): {description}")
         if details:
             print(f"    -> Issue: {details}")
 
@@ -40,7 +43,7 @@ def check_http_content(url, keyword):
     return False, "Unknown error"
 
 def main():
-    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER")
+    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (PARTIAL MARKS)")
     
     session = boto3.session.Session()
     region = session.region_name
@@ -56,31 +59,39 @@ def main():
     s3 = boto3.client('s3')
     rds = boto3.client('rds')
 
-    # --- TASK 1: EC2 & SECURITY (25 MARKS) ---
-    print_header("Task 1: EC2, Launch Template & Security")
+    # =========================================================
+    # TASK 1: EC2 & SECURITY (25 MARKS)
+    # =========================================================
+    print_header("Task 1: EC2 & Security")
+    
+    # 1. Launch Template Existence (5 Marks)
     try:
-        # 1. Check Launch Template (5 Marks)
         lts = ec2.describe_launch_templates()['LaunchTemplates']
         target_lt = next((lt for lt in lts if "lt-" in lt['LaunchTemplateName']), None)
-        lt_found = False
+        lt_ver = None
+        
         if target_lt:
-            lt_found = True
+            grade_step("Launch Template Found", 5, True)
             lt_id = target_lt['LaunchTemplateId']
-            grade_step("Launch Template created", 5, True)
-            
-            # 2. Check Instance Type (5 Marks)
             lt_ver = ec2.describe_launch_template_versions(LaunchTemplateId=lt_id)['LaunchTemplateVersions'][0]
-            instance_type = lt_ver['LaunchTemplateData'].get('InstanceType', 'Unknown')
-            grade_step("Instance Type is t3.medium", 5, instance_type == 't3.medium')
-            
-            # 3. Check User Data (10 Marks)
-            grade_step("User Data Script configured", 10, 'UserData' in lt_ver['LaunchTemplateData'])
         else:
-            grade_step("Launch Template created", 5, False)
-            grade_step("Instance Type is t3.medium", 5, False)
-            grade_step("User Data Script configured", 10, False)
+            grade_step("Launch Template Found", 5, False, "Missing 'lt-*'")
 
-        # 4. Check Security Group 'web-access' (5 Marks)
+        # 2. Instance Type (5 Marks)
+        if lt_ver:
+            itype = lt_ver['LaunchTemplateData'].get('InstanceType', 'Unknown')
+            grade_step("Instance Type is t3.medium", 5, itype == 't3.medium', f"Found: {itype}")
+        else:
+            grade_step("Instance Type is t3.medium", 5, False, "No LT to check")
+
+        # 3. User Data (10 Marks)
+        if lt_ver:
+            has_ud = 'UserData' in lt_ver['LaunchTemplateData']
+            grade_step("User Data Script Configured", 10, has_ud)
+        else:
+            grade_step("User Data Script Configured", 10, False)
+
+        # 4. Security Group - PARTIAL MARKS (2 for SSH, 3 for HTTP)
         sgs = ec2.describe_security_groups()['SecurityGroups']
         web_sg = next((sg for sg in sgs if sg['GroupName'] == 'web-access'), None)
         
@@ -88,193 +99,203 @@ def main():
             perms = web_sg['IpPermissions']
             has_ssh = False
             has_http = False
-            
             for p in perms:
                 if p.get('FromPort') == 22 or p.get('IpProtocol') == '-1': has_ssh = True
                 if p.get('FromPort') == 80 or p.get('IpProtocol') == '-1': has_http = True
             
-            if has_ssh and has_http:
-                grade_step("SG 'web-access' allows SSH & HTTP", 5, True)
-            else:
-                grade_step("SG 'web-access' allows SSH & HTTP", 5, False, f"Missing ports (SSH:{has_ssh}, HTTP:{has_http})")
+            grade_step("SG: Port 22 (SSH) Open", 2, has_ssh)
+            grade_step("SG: Port 80 (HTTP) Open", 3, has_http)
         else:
-            grade_step("SG 'web-access' allows SSH & HTTP", 5, False, "Security Group 'web-access' not found")
+            grade_step("SG: Port 22 (SSH) Open", 2, False, "SG 'web-access' missing")
+            grade_step("SG: Port 80 (HTTP) Open", 3, False, "SG 'web-access' missing")
 
     except Exception as e:
         print(f"Error Task 1: {e}")
 
-    # --- TASK 2: ASG & ALB (25 MARKS) ---
+    # =========================================================
+    # TASK 2: ASG & ALB (25 MARKS)
+    # =========================================================
     print_header("Task 2: ASG & ALB")
+    
     alb_dns = None
     try:
+        # 1. ALB Checks - PARTIAL MARKS (2 Created, 3 Internet Facing)
         albs = elbv2.describe_load_balancers()['LoadBalancers']
         target_alb = next((alb for alb in albs if "alb-" in alb['LoadBalancerName']), None)
+        
         if target_alb:
+            grade_step("ALB Created", 2, True)
+            grade_step("ALB Internet-Facing", 3, target_alb['Scheme'] == 'internet-facing')
             alb_dns = target_alb['DNSName']
-            grade_step("ALB Exists & Internet Facing", 5, target_alb['Scheme'] == 'internet-facing')
         else:
-            grade_step("ALB Exists", 5, False)
+            grade_step("ALB Created", 2, False)
+            grade_step("ALB Internet-Facing", 3, False)
 
+        # 2. Target Group - PARTIAL MARKS (2 Created, 3 Healthy)
         tgs = elbv2.describe_target_groups()['TargetGroups']
         target_tg = next((tg for tg in tgs if "tg-" in tg['TargetGroupName']), None)
+        
         if target_tg:
+            grade_step("Target Group Created", 2, True)
             health = elbv2.describe_target_health(TargetGroupArn=target_tg['TargetGroupArn'])
-            grade_step("Target Group Exists & Healthy", 5, bool(health['TargetHealthDescriptions']))
+            has_healthy = any(t['TargetHealth']['State'] == 'healthy' for t in health['TargetHealthDescriptions'])
+            grade_step("Targets Registered & Healthy", 3, has_healthy)
         else:
-            grade_step("Target Group Exists", 5, False)
+            grade_step("Target Group Created", 2, False)
+            grade_step("Targets Registered & Healthy", 3, False)
 
+        # 3. ASG - PARTIAL MARKS (2 Created, 3 Config)
         asgs = asg_client.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if "asg-" in a['AutoScalingGroupName']), None)
+        
         if target_asg:
-            grade_step("ASG Created", 5, True)
-            grade_step("Scaling Config (1-2-4)", 5, target_asg['MinSize']==1 and target_asg['MaxSize']==4)
+            grade_step("ASG Created", 2, True)
+            is_config_ok = (target_asg['MinSize']==1 and target_asg['MaxSize']==4)
+            grade_step("Scaling Config (1-2-4)", 3, is_config_ok, f"Found Min:{target_asg['MinSize']} Max:{target_asg['MaxSize']}")
         else:
-            grade_step("ASG Created", 5, False)
-            grade_step("Scaling Config (1-2-4)", 5, False)
+            grade_step("ASG Created", 2, False)
+            grade_step("Scaling Config (1-2-4)", 3, False)
 
+        # 4. Web Access (5 Marks)
         if alb_dns:
-            print(f"    Testing ALB URL: http://{alb_dns}")
+            print(f"    Testing ALB: http://{alb_dns}")
             success, msg = check_http_content(f"http://{alb_dns}", student_name_input)
-            grade_step("Web accessible via ALB", 5, success, msg)
+            grade_step("Web Page Accessible via ALB", 5, success, msg)
         else:
-            grade_step("Web accessible via ALB", 5, False)
+            grade_step("Web Page Accessible via ALB", 5, False)
+
     except Exception as e:
         print(f"Error Task 2: {e}")
 
-    # --- TASK 3: S3 (25 MARKS) ---
+    # =========================================================
+    # TASK 3: S3 (25 MARKS)
+    # =========================================================
     print_header("Task 3: S3 Static Website")
     target_bucket_name = None
     try:
         buckets = s3.list_buckets()['Buckets']
         target_bucket = next((b for b in buckets if "s3-" in b['Name']), None)
+        
         if target_bucket:
             target_bucket_name = target_bucket['Name']
             grade_step("Bucket Created", 5, True)
+            
+            # Hosting
             try:
                 s3.get_bucket_website(Bucket=target_bucket_name)
                 grade_step("Static Hosting Enabled", 5, True)
             except:
                 grade_step("Static Hosting Enabled", 5, False)
             
+            # Files - PARTIAL (2.5 each? Script uses int so 2 and 3)
+            # Let's do 2 for Index, 3 for Error/Others
             try:
                 objs = s3.list_objects_v2(Bucket=target_bucket_name)
                 files = [o['Key'] for o in objs.get('Contents', [])]
-                grade_step("Index/Error files exist", 5, 'index.html' in files and 'error.html' in files)
+                grade_step("File: index.html found", 2, 'index.html' in files)
+                grade_step("File: error.html found", 3, 'error.html' in files)
             except:
-                 grade_step("Index/Error files exist", 5, False)
+                 grade_step("File: index.html found", 2, False)
+                 grade_step("File: error.html found", 3, False)
 
+            # Policy
             try:
                 pol = s3.get_bucket_policy(Bucket=target_bucket_name)
                 grade_step("Bucket Policy (Public)", 5, "Allow" in pol['Policy'])
             except:
                 grade_step("Bucket Policy (Public)", 5, False)
 
+            # Verify
             s3_url = f"http://{target_bucket_name}.s3-website-{region}.amazonaws.com"
-            print(f"    Testing S3 URL: {s3_url}")
             success, msg = check_http_content(s3_url, student_name_input)
             grade_step("Website Verified in Browser", 5, success, msg)
         else:
             grade_step("Bucket Created", 5, False)
             grade_step("Static Hosting Enabled", 5, False)
-            grade_step("Index/Error files exist", 5, False)
+            grade_step("File: index.html found", 2, False)
+            grade_step("File: error.html found", 3, False)
             grade_step("Bucket Policy (Public)", 5, False)
             grade_step("Website Verified in Browser", 5, False)
+
     except Exception as e:
         print(f"Error Task 3: {e}")
 
-    # --- TASK 4: RDS (25 MARKS) ---
-    print_header("Task 4: RDS MySQL & Connection Evidence")
+    # =========================================================
+    # TASK 4: RDS (25 MARKS - PARTIAL)
+    # =========================================================
+    print_header("Task 4: RDS & Evidence")
     try:
         dbs = rds.describe_db_instances()['DBInstances']
         
         target_rds = next((d for d in dbs if "rds-" in d['DBInstanceIdentifier']), None)
-        using_default_name = False
+        using_default = False
         if not target_rds:
             target_rds = next((d for d in dbs if d['DBInstanceIdentifier'] == "database-1"), None)
-            if target_rds:
-                using_default_name = True
+            if target_rds: using_default = True
 
         if target_rds:
-            # CHECK 1: RDS CONFIGURATION (5 Marks)
+            # 1. Config Breakdown (5 Marks total)
+            grade_step("RDS Name Correct", 1, not using_default, "Used 'database-1'")
+            
             inst_type = target_rds['DBInstanceClass']
             storage = target_rds['AllocatedStorage']
+            grade_step("RDS Specs (t4g.micro/30GB)", 2, (inst_type == 'db.t4g.micro' and storage == 30), f"Found {inst_type}/{storage}GB")
+            
             db_name = target_rds.get('DBName', '')
-            
-            config_errors = []
-            if using_default_name: config_errors.append("Wrong Name")
-            if inst_type != 'db.t4g.micro': config_errors.append(f"Wrong Type ({inst_type})")
-            if storage != 30: config_errors.append(f"Wrong Storage ({storage}GB)")
-            if db_name != 'firstdb': config_errors.append(f"Wrong Initial DB ({db_name})")
-            
-            if not config_errors:
-                grade_step("RDS Config (Specs, Name, InitialDB)", 5, True)
-            else:
-                grade_step("RDS Config (Specs, Name, InitialDB)", 5, False, f"Issues: {', '.join(config_errors)}")
+            grade_step("Initial DB 'firstdb'", 2, db_name == 'firstdb', f"Found '{db_name}'")
 
-            # CHECK 2: Security Group (5 Marks)
+            # 2. Security Group Breakdown (5 Marks total)
             vpc_sgs = target_rds['VpcSecurityGroups']
-            secure = False
-            details = "No SG found"
+            has_3306 = False
+            is_secure = False
+            
             if vpc_sgs:
                 sg_id = vpc_sgs[0]['VpcSecurityGroupId']
                 sg_resp = ec2.describe_security_groups(GroupIds=[sg_id])
                 perms = sg_resp['SecurityGroups'][0]['IpPermissions']
-                
-                has_3306 = False
-                is_public = False
-                uses_sg_ref = False
-                
                 for p in perms:
                     if p.get('FromPort') == 3306 or p.get('IpProtocol') == '-1':
                         has_3306 = True
-                        for r in p.get('IpRanges', []):
-                            if r.get('CidrIp') == '0.0.0.0/0': is_public = True
-                        if p.get('UserIdGroupPairs'): uses_sg_ref = True
-                
-                if has_3306 and not is_public and uses_sg_ref:
-                    secure = True
-                else:
-                    details = f"Open:{has_3306}, Public:{is_public}, SG-Ref:{uses_sg_ref}"
-
-            grade_step("Security Group (Restricted to EC2)", 5, secure, details)
-
-            # CHECK 3 & 4: SPLIT EVIDENCE CHECK (10 + 5 Marks)
-            print("    Checking S3 for evidence file 'db_results.txt'...")
+                        # Check for 0.0.0.0/0
+                        is_public = any(r.get('CidrIp') == '0.0.0.0/0' for r in p.get('IpRanges', []))
+                        if not is_public: is_secure = True
             
+            grade_step("RDS SG: Port 3306 Open", 2, has_3306)
+            grade_step("RDS SG: No Public Access (0.0.0.0)", 3, is_secure and has_3306)
+
+            # 3. Evidence Breakdown (15 Marks total)
+            print("    Checking S3 for evidence file...")
             file_found = False
-            has_firstdb = False
-            has_testdb = False
+            has_first = False
+            has_test = False
             
             if target_bucket_name:
                 try:
                     file_obj = s3.get_object(Bucket=target_bucket_name, Key='db_results.txt')
-                    file_content = file_obj['Body'].read().decode('utf-8')
+                    content = file_obj['Body'].read().decode('utf-8')
                     file_found = True
-                    if "firstdb" in file_content: has_firstdb = True
-                    if "testdb" in file_content: has_testdb = True
+                    if "firstdb" in content: has_first = True
+                    if "testdb" in content: has_test = True
                 except:
                     pass
             
-            # Sub-Check A: File Exists + Connected (10 Marks)
-            if file_found and has_firstdb:
-                grade_step("Evidence: Connection Successful (File found)", 10, True)
-            else:
-                grade_step("Evidence: Connection Successful (File found)", 10, False, "File missing or 'firstdb' not in list")
-
-            # Sub-Check B: Manual Task (5 Marks)
-            if file_found and has_testdb:
-                grade_step("Evidence: Manual 'testdb' Created", 5, True)
-            else:
-                grade_step("Evidence: Manual 'testdb' Created", 5, False, "'testdb' missing from list")
+            grade_step("Evidence File Found in S3", 5, file_found)
+            grade_step("Evidence: Connection ('firstdb' listed)", 5, has_first)
+            grade_step("Evidence: Manual Task ('testdb' listed)", 5, has_test)
 
         else:
-            grade_step("RDS Config (Specs, Name, InitialDB)", 5, False, "No Database Found")
-            grade_step("Security Group (Restricted to EC2)", 5, False)
-            grade_step("Evidence: Connection Successful", 10, False)
-            grade_step("Evidence: Manual 'testdb' Created", 5, False)
+            # RDS Not found - all fail
+            grade_step("RDS Name Correct", 1, False)
+            grade_step("RDS Specs (t4g.micro/30GB)", 2, False)
+            grade_step("Initial DB 'firstdb'", 2, False)
+            grade_step("RDS SG: Port 3306 Open", 2, False)
+            grade_step("RDS SG: No Public Access", 3, False)
+            grade_step("Evidence File Found in S3", 5, False)
+            grade_step("Evidence: Connection", 5, False)
+            grade_step("Evidence: Manual Task", 5, False)
 
     except Exception as e:
-        print(f"Error checking RDS: {e}")
+        print(f"Error Task 4: {e}")
 
     # --- FINAL REPORT ---
     print_header("FINAL RESULT")
