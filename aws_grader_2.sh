@@ -40,7 +40,8 @@ def check_http_content(url, keyword):
     return False, "Unknown error"
 
 def main():
-    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (FINAL)")
+    # UPDATED HEADER TO VERIFY VERSION
+    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (100% VERIFIED)")
     
     session = boto3.session.Session()
     region = session.region_name
@@ -134,14 +135,14 @@ def main():
             grade_step("Target Group Created", 2, False)
             grade_step("Targets Registered & Healthy", 3, False)
 
-        # ASG (10 MARKS - RESTORED VALUE)
+        # ASG (10 MARKS) <--- UPDATED to 5 + 5
         asgs = asg_client.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if "asg-" in a['AutoScalingGroupName']), None)
         
         if target_asg:
-            grade_step("ASG Created", 5, True) # Restored to 5
+            grade_step("ASG Created", 5, True)
             is_config_ok = (target_asg['MinSize']==1 and target_asg['MaxSize']==4)
-            grade_step("Scaling Config (1-2-4)", 5, is_config_ok, f"Found Min:{target_asg['MinSize']} Max:{target_asg['MaxSize']}") # Restored to 5
+            grade_step("Scaling Config (1-2-4)", 5, is_config_ok, f"Found Min:{target_asg['MinSize']} Max:{target_asg['MaxSize']}")
         else:
             grade_step("ASG Created", 5, False)
             grade_step("Scaling Config (1-2-4)", 5, False)
