@@ -40,8 +40,7 @@ def check_http_content(url, keyword):
     return False, "Unknown error"
 
 def main():
-    # UPDATED HEADER TO VERIFY VERSION
-    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (100% VERIFIED)")
+    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (REBALANCED)")
     
     session = boto3.session.Session()
     region = session.region_name
@@ -58,7 +57,7 @@ def main():
     rds = boto3.client('rds')
 
     # =========================================================
-    # TASK 1: EC2 & SECURITY (25 MARKS)
+    # TASK 1: EC2 & SECURITY (25 MARKS - REBALANCED)
     # =========================================================
     print_header("Task 1: EC2 & Security")
     
@@ -77,12 +76,15 @@ def main():
         if lt_ver:
             itype = lt_ver['LaunchTemplateData'].get('InstanceType', 'Unknown')
             grade_step("Instance Type is t3.medium", 5, itype == 't3.medium', f"Found: {itype}")
+            
+            # USER DATA (Reduced to 5)
             has_ud = 'UserData' in lt_ver['LaunchTemplateData']
-            grade_step("User Data Script Configured", 10, has_ud)
+            grade_step("User Data Script Configured", 5, has_ud)
         else:
             grade_step("Instance Type is t3.medium", 5, False, "No LT to check")
-            grade_step("User Data Script Configured", 10, False)
+            grade_step("User Data Script Configured", 5, False)
 
+        # SECURITY GROUP (Increased to 10 - 5 SSH, 5 HTTP)
         sgs = ec2.describe_security_groups()['SecurityGroups']
         web_sg = next((sg for sg in sgs if sg['GroupName'] == 'web-access'), None)
         
@@ -94,11 +96,11 @@ def main():
                 if p.get('FromPort') == 22 or p.get('IpProtocol') == '-1': has_ssh = True
                 if p.get('FromPort') == 80 or p.get('IpProtocol') == '-1': has_http = True
             
-            grade_step("SG: Port 22 (SSH) Open", 2, has_ssh)
-            grade_step("SG: Port 80 (HTTP) Open", 3, has_http)
+            grade_step("SG: Port 22 (SSH) Open", 5, has_ssh)
+            grade_step("SG: Port 80 (HTTP) Open", 5, has_http)
         else:
-            grade_step("SG: Port 22 (SSH) Open", 2, False, "SG 'web-access' missing")
-            grade_step("SG: Port 80 (HTTP) Open", 3, False, "SG 'web-access' missing")
+            grade_step("SG: Port 22 (SSH) Open", 5, False, "SG 'web-access' missing")
+            grade_step("SG: Port 80 (HTTP) Open", 5, False, "SG 'web-access' missing")
 
     except Exception as e:
         print(f"Error Task 1: {e}")
@@ -135,7 +137,7 @@ def main():
             grade_step("Target Group Created", 2, False)
             grade_step("Targets Registered & Healthy", 3, False)
 
-        # ASG (10 MARKS) <--- UPDATED to 5 + 5
+        # ASG (10 MARKS)
         asgs = asg_client.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if "asg-" in a['AutoScalingGroupName']), None)
         
