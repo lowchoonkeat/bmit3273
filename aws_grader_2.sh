@@ -56,7 +56,7 @@ def main():
     s3 = boto3.client('s3')
     rds = boto3.client('rds')
 
-    # --- TASK 1: EC2 ---
+    # --- TASK 1: EC2 (25 MARKS) ---
     print_header("Task 1: EC2 & Launch Template")
     try:
         lts = ec2.describe_launch_templates()['LaunchTemplates']
@@ -75,7 +75,7 @@ def main():
     except Exception as e:
         print(f"Error Task 1: {e}")
 
-    # --- TASK 2: ASG & ALB ---
+    # --- TASK 2: ASG & ALB (25 MARKS) ---
     print_header("Task 2: ASG & ALB")
     alb_dns = None
     try:
@@ -113,7 +113,7 @@ def main():
     except Exception as e:
         print(f"Error Task 2: {e}")
 
-    # --- TASK 3: S3 ---
+    # --- TASK 3: S3 (25 MARKS) ---
     print_header("Task 3: S3 Static Website")
     target_bucket_name = None
     try:
@@ -154,7 +154,7 @@ def main():
     except Exception as e:
         print(f"Error Task 3: {e}")
 
-    # --- TASK 4: RDS (UPDATED: Penalty Logic) ---
+    # --- TASK 4: RDS (25 MARKS) ---
     print_header("Task 4: RDS MySQL & Connection Evidence")
     try:
         dbs = rds.describe_db_instances()['DBInstances']
@@ -170,31 +170,26 @@ def main():
                 using_default_name = True
 
         if target_rds:
-            # GRADE THE NAMING/CREATION
-            if using_default_name:
-                grade_step("RDS Instance Created (Naming Check)", 5, False, "Penalty: Used 'database-1' instead of 'rds-<name>'")
-            else:
-                grade_step("RDS Instance Created (Naming Check)", 5, True)
-            
-            # GRADE THE REST (Specs, DB, SG, Evidence)
-            
-            # 1. Hardware Specs (db.t4g.micro & 30GB)
+            # CHECK 1: RDS CREATION + SPECS (5 Marks Total)
             inst_type = target_rds['DBInstanceClass']
             storage = target_rds['AllocatedStorage']
+            spec_pass = (inst_type == 'db.t4g.micro' and storage == 30)
             
-            if inst_type == 'db.t4g.micro' and storage == 30:
-                 grade_step("Specs (t4g.micro / 30GB)", 5, True)
+            if not using_default_name and spec_pass:
+                grade_step("RDS Created & Specs Correct", 5, True)
+            elif using_default_name:
+                grade_step("RDS Created & Specs Correct", 5, False, "Penalty: Used 'database-1' instead of 'rds-<name>'")
             else:
-                 grade_step("Specs (t4g.micro / 30GB)", 5, False, f"Found {inst_type} / {storage}GB")
+                grade_step("RDS Created & Specs Correct", 5, False, f"Wrong Specs: {inst_type} / {storage}GB")
 
-            # 2. Initial DB 'firstdb' check
+            # CHECK 2: Initial DB 'firstdb' (5 Marks)
             db_name = target_rds.get('DBName', '')
             if db_name == 'firstdb':
                 grade_step("Initial DB 'firstdb' Created", 5, True)
             else:
                 grade_step("Initial DB 'firstdb' Created", 5, False, f"Found DBName: '{db_name}'")
 
-            # 3. Security Group
+            # CHECK 3: Security Group (5 Marks)
             vpc_sgs = target_rds['VpcSecurityGroups']
             secure = False
             details = "No SG found"
@@ -223,7 +218,7 @@ def main():
 
             grade_step("Security Group (Restricted to EC2)", 5, secure, details)
 
-            # 4. EVIDENCE CHECK
+            # CHECK 4: EVIDENCE CHECK (10 Marks)
             print("    Checking S3 for evidence file 'db_results.txt'...")
             evidence_passed = False
             evidence_details = "File not found or content missing"
@@ -243,8 +238,7 @@ def main():
 
         else:
             # If NEITHER is found
-            grade_step("RDS Instance Created", 5, False, "No 'rds-*' or 'database-1' found")
-            grade_step("Specs (t4g.micro / 30GB)", 5, False)
+            grade_step("RDS Created & Specs Correct", 5, False, "No 'rds-*' or 'database-1' found")
             grade_step("Initial DB 'firstdb' Created", 5, False)
             grade_step("Security Group (Restricted)", 5, False)
             grade_step("Evidence: Connection & 'testdb'", 10, False)
