@@ -40,7 +40,7 @@ def check_http_content(url, keyword):
     return False, "Unknown error"
 
 def main():
-    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (REBALANCED)")
+    print_header("BMIT3273 CLOUD COMPUTING - AUTO GRADER (FINAL v9)")
     
     session = boto3.session.Session()
     region = session.region_name
@@ -57,7 +57,7 @@ def main():
     rds = boto3.client('rds')
 
     # =========================================================
-    # TASK 1: EC2 & SECURITY (25 MARKS - REBALANCED)
+    # TASK 1: EC2 & SECURITY (25 MARKS)
     # =========================================================
     print_header("Task 1: EC2 & Security")
     
@@ -77,14 +77,14 @@ def main():
             itype = lt_ver['LaunchTemplateData'].get('InstanceType', 'Unknown')
             grade_step("Instance Type is t3.medium", 5, itype == 't3.medium', f"Found: {itype}")
             
-            # USER DATA (Reduced to 5)
+            # UPDATED: User Data is now only 5 Marks
             has_ud = 'UserData' in lt_ver['LaunchTemplateData']
             grade_step("User Data Script Configured", 5, has_ud)
         else:
             grade_step("Instance Type is t3.medium", 5, False, "No LT to check")
             grade_step("User Data Script Configured", 5, False)
 
-        # SECURITY GROUP (Increased to 10 - 5 SSH, 5 HTTP)
+        # UPDATED: Security Group is now 10 Marks (5 + 5)
         sgs = ec2.describe_security_groups()['SecurityGroups']
         web_sg = next((sg for sg in sgs if sg['GroupName'] == 'web-access'), None)
         
