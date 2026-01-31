@@ -37,7 +37,7 @@ def check_http_partial(url, name, student_id):
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER (RELEASE v9.0)")
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER (VERSION 10.0)")
     
     session = boto3.session.Session()
     region = session.region_name
@@ -65,11 +65,11 @@ def main():
             pk = next((k['AttributeName'] for k in desc['KeySchema'] if k['KeyType'] == 'HASH'), None)
             grade_step("Partition Key 'student_id'", 5, pk == 'student_id')
             
-            # UPDATED: Case Insensitive Check
+            # Case Insensitive Check
             scan = ddb.scan(TableName=target_t)
             has_item = False
             for i in scan.get('Items', []):
-                status_val = i.get('status', {}).get('S', '').lower() # Force lowercase
+                status_val = i.get('status', {}).get('S', '').lower()
                 if status_val == 'active':
                     has_item = True
             grade_step("Item Added (active/Active)", 10, has_item)
@@ -87,31 +87,36 @@ def main():
         buckets = s3.list_buckets()['Buckets']
         target_b = next((b['Name'] for b in buckets if f"s3-{student_name}" in b['Name']), None)
         if target_b:
-            grade_step(f"Bucket Found", 5, True)
+            grade_step(f"Bucket Found", 2, True)
+            
+            # Tagging Check (Replaces Block Public Access)
             try:
-                pab = s3.get_public_access_block(Bucket=target_b)
-                conf = pab['PublicAccessBlockConfiguration']
-                is_blocked = conf['BlockPublicAcls'] and conf['IgnorePublicAcls'] and conf['BlockPublicPolicy'] and conf['RestrictPublicBuckets']
-                grade_step("Block Public Access Enabled", 5, is_blocked)
-            except: grade_step("Block Public Access Enabled", 5, False)
+                tags = s3.get_bucket_tagging(Bucket=target_b)['TagSet']
+                has_tag = False
+                for t in tags:
+                    if t['Key'].lower() == 'project' and t['Value'].lower() == 'finalassessment':
+                        has_tag = True
+                grade_step("Tag Added (Project: FinalAssessment)", 4, has_tag)
+            except: grade_step("Tag Added (Project: FinalAssessment)", 4, False, "No Tags")
 
             ver = s3.get_bucket_versioning(Bucket=target_b)
-            grade_step("Versioning Enabled", 5, ver.get('Status') == 'Enabled')
+            grade_step("Versioning Enabled", 4, ver.get('Status') == 'Enabled')
+            
             try:
                 lc = s3.get_bucket_lifecycle_configuration(Bucket=target_b)
                 has_ia = any(t.get('StorageClass') == 'STANDARD_IA' for r in lc.get('Rules', []) for t in r.get('Transitions', []))
-                grade_step("Lifecycle Rule (Standard-IA)", 5, has_ia)
-            except: grade_step("Lifecycle Rule (Standard-IA)", 5, False)
+                grade_step("Lifecycle Rule (Standard-IA)", 10, has_ia)
+            except: grade_step("Lifecycle Rule (Standard-IA)", 10, False)
 
             try:
                 s3.head_object(Bucket=target_b, Key='config.txt')
                 grade_step("File 'config.txt' Uploaded", 5, True)
             except: grade_step("File 'config.txt' Uploaded", 5, False)
         else:
-            grade_step("Bucket Found", 5, False)
-            grade_step("Block Public Access", 5, False)
-            grade_step("Versioning", 5, False)
-            grade_step("Lifecycle", 5, False)
+            grade_step("Bucket Found", 2, False)
+            grade_step("Tag Added", 4, False)
+            grade_step("Versioning", 4, False)
+            grade_step("Lifecycle", 10, False)
             grade_step("File Uploaded", 5, False)
     except Exception as e: print(f"Error Task 2: {e}")
 
@@ -134,16 +139,15 @@ def main():
             iam_prof = data.get('IamInstanceProfile', {}).get('Name', '') or data.get('IamInstanceProfile', {}).get('Arn', '')
             grade_step("LabInstanceProfile Attached", 3, "LabInstanceProfile" in iam_prof)
             
-            # Security Group Check (PARTIAL SCORING)
+            # Security Group Check (Partial Scoring)
             sg_ids = data.get('SecurityGroupIds', [])
             sg_points = 0
-            sg_msg = "Security Group Not Found/Closed"
+            sg_msg = "SG Not Found/Closed"
             
             if sg_ids:
                 sg_resp = ec2.describe_security_groups(GroupIds=sg_ids)['SecurityGroups'][0]
                 has_all = False
                 has_http = False
-                
                 for p in sg_resp['IpPermissions']:
                     is_open = any(r.get('CidrIp') == '0.0.0.0/0' for r in p.get('IpRanges', []))
                     if is_open:
@@ -152,17 +156,14 @@ def main():
                 
                 if has_all:
                     sg_points = 2
-                    sg_msg = "Partial: 'All Traffic' allowed (Insecure -3 marks)"
+                    sg_msg = "Partial: 'All Traffic' (-3 Marks)"
                 elif has_http:
                     sg_points = 5
-                    sg_msg = "Perfect: Port 80 Open Only"
+                    sg_msg = "Perfect: Port 80 Open"
             
             global SCORED_MARKS
             SCORED_MARKS += sg_points
-            if sg_points > 0:
-                print(f"[\u2713] PASS (+{sg_points}/5): Security Group - {sg_msg}")
-            else:
-                print(f"[X] FAIL (0/5): Security Group - {sg_msg}")
+            print(f"[{'✓' if sg_points>0 else 'X'}] PASS/PARTIAL (+{sg_points}/5): Security Group - {sg_msg}")
 
             # Script Logic Checks (3 x 5 Marks)
             ud_encoded = data.get('UserData', '')
@@ -215,7 +216,7 @@ def main():
             has_tt = any(p['PolicyType'] == 'TargetTrackingScaling' for p in pols)
             grade_step("Scaling Policy Configured", 5, has_tt)
             
-            # SPLIT FUNCTIONAL CHECK (5 + 10)
+            # Split Functional Check
             if alb_dns:
                 print(f"    Testing URL: http://{alb_dns}")
                 has_name, has_id, msg = check_http_partial(f"http://{alb_dns}", student_name, student_id)
