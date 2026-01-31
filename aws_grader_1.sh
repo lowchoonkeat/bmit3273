@@ -35,7 +35,7 @@ def check_http_partial(url, name, student_id):
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER (STRICT)")
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER (HA OPTIMIZED)")
     session = boto3.session.Session()
     print(f"Region: {session.region_name}")
     
@@ -171,7 +171,7 @@ def main():
     except Exception as e: print(f"Error Task 3: {e}")
 
     # ---------------------------------------------------------
-    # TASK 4: HIGH AVAILABILITY (25 Marks) - STRICT CHECKS
+    # TASK 4: HIGH AVAILABILITY (25 Marks) - STRICT 2/2/4 & 60%
     # ---------------------------------------------------------
     print_header("Task 4: High Availability (25 Marks)")
     alb_dns = None
@@ -187,20 +187,20 @@ def main():
         asgs = asg.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if f"asg-{student_name}" in a['AutoScalingGroupName']), None)
         if target_asg:
-            # Strict Capacity Check
+            # Strict Capacity Check (2/2/4)
             real_min, real_max, real_des = target_asg.get('MinSize'), target_asg.get('MaxSize'), target_asg.get('DesiredCapacity')
-            cap_ok = (real_min == 1 and real_des == 2 and real_max == 4)
-            grade_step(f"ASG Capacity (1/2/4)", 3, cap_ok, f"Found Min:{real_min}, Des:{real_des}, Max:{real_max}")
+            cap_ok = (real_min == 2 and real_des == 2 and real_max == 4)
+            grade_step(f"ASG Capacity (2/2/4)", 3, cap_ok, f"Found Min:{real_min}, Des:{real_des}, Max:{real_max}")
             
-            # Strict Scaling Check
+            # Strict Scaling Check (CPU 60.0)
             pols = asg.describe_policies(AutoScalingGroupName=target_asg['AutoScalingGroupName'])['ScalingPolicies']
             policy_ok, found_val = False, "None"
             for p in pols:
                 if p['PolicyType'] == 'TargetTrackingScaling':
                     t_val = p.get('TargetTrackingConfiguration', {}).get('TargetValue', 0.0)
                     found_val = t_val
-                    if t_val == 50.0: policy_ok = True; break
-            grade_step("Scaling Policy (CPU 50%)", 5, policy_ok, f"Found Target: {found_val}%")
+                    if t_val == 60.0: policy_ok = True; break
+            grade_step("Scaling Policy (CPU 60%)", 5, policy_ok, f"Found Target: {found_val}%")
             
             # Split Functional Check
             if alb_dns:
@@ -212,8 +212,8 @@ def main():
                 grade_step("Functional: Web Page Loads (Name)", 5, False)
                 grade_step("Functional: S3 Data Visible (ID)", 10, False)
         else:
-            grade_step("ASG Capacity (1/2/4)", 3, False)
-            grade_step("Scaling Policy (CPU 50%)", 5, False)
+            grade_step("ASG Capacity (2/2/4)", 3, False)
+            grade_step("Scaling Policy (CPU 60%)", 5, False)
             grade_step("Functional: Web Page Loads (Name)", 5, False)
             grade_step("Functional: S3 Data Visible (ID)", 10, False)
     except Exception as e: print(f"Error Task 4: {e}")
