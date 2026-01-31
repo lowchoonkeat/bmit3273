@@ -1,7 +1,7 @@
 import boto3
 import urllib.request
 import ssl
-import time
+import base64
 
 # --- CONFIGURATION ---
 ssl_context = ssl._create_unverified_context()
@@ -19,35 +19,32 @@ def grade_step(desc, points, condition, issue=""):
         print(f"[X] FAIL (0/{points}): {desc}")
         if issue: print(f"    -> Issue: {issue}")
 
-def check_http_content(url, name, student_id):
+def check_http_partial(url, name, student_id):
     try:
         with urllib.request.urlopen(url, timeout=5, context=ssl_context) as r:
             content = r.read().decode('utf-8').lower()
             
-            # We check if BOTH the name and the ID (from S3) are visible
-            has_name = name in content
-            has_id = student_id in content
+            found_name = name in content
+            found_id = student_id in content
             
-            if has_name and has_id:
-                return True, "Name AND Student ID found (S3 Read Success)"
-            elif has_name:
-                return False, "Name found, but Student ID missing (S3 Download Failed?)"
-            elif "nginx" in content:
-                return False, "Default Nginx page (User Data failed)"
+            if found_name and found_id:
+                return True, True, "Success: Name AND ID found"
+            elif found_name:
+                return True, False, "Partial: Name found, but ID missing"
             else:
-                return False, "Page loads, content incorrect"
-    except Exception as e: return False, str(e)
+                return False, False, "Fail: Name not found (Nginx Default or Error)"
+                
+    except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL ASSESSMENT GRADER")
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER (RELEASE v9.0)")
     
     session = boto3.session.Session()
     region = session.region_name
     print(f"Region: {region}")
     
-    # INPUTS
-    student_name = input("Enter Student Name (as used in resource names): ").strip().lower().replace(" ", "")
-    student_id = input("Enter Student ID (to verify S3 retrieval): ").strip().lower()
+    student_name = input("Enter Student Name: ").strip().lower().replace(" ", "")
+    student_id = input("Enter Student ID: ").strip().lower()
     
     ec2 = boto3.client('ec2')
     s3 = boto3.client('s3')
@@ -58,141 +55,180 @@ def main():
     # ---------------------------------------------------------
     # TASK 1: DYNAMODB (25 Marks)
     # ---------------------------------------------------------
-    print_header("Task 1: DynamoDB (Database)")
+    print_header("Task 1: DynamoDB (25 Marks)")
     try:
         tbls = ddb.list_tables()['TableNames']
         target_t = next((t for t in tbls if f"ddb-{student_name}" in t), None)
-        
         if target_t:
             grade_step(f"Table Found ({target_t})", 10, True)
-            
             desc = ddb.describe_table(TableName=target_t)['Table']
             pk = next((k['AttributeName'] for k in desc['KeySchema'] if k['KeyType'] == 'HASH'), None)
-            grade_step("Partition Key is 'student_id'", 5, pk == 'student_id', f"Found: {pk}")
+            grade_step("Partition Key 'student_id'", 5, pk == 'student_id')
             
+            # UPDATED: Case Insensitive Check
             scan = ddb.scan(TableName=target_t)
             has_item = False
-            if scan['Count'] > 0:
-                for item in scan['Items']:
-                    if item.get('status', {}).get('S') == 'active': has_item = True
-            grade_step("Item Added (status: active)", 10, has_item)
+            for i in scan.get('Items', []):
+                status_val = i.get('status', {}).get('S', '').lower() # Force lowercase
+                if status_val == 'active':
+                    has_item = True
+            grade_step("Item Added (active/Active)", 10, has_item)
         else:
-            grade_step("Table Created", 10, False)
-            grade_step("Partition Key Correct", 5, False)
+            grade_step("Table Found", 10, False)
+            grade_step("Partition Key", 5, False)
             grade_step("Item Added", 10, False)
-
     except Exception as e: print(f"Error Task 1: {e}")
 
     # ---------------------------------------------------------
     # TASK 2: S3 SECURITY (25 Marks)
     # ---------------------------------------------------------
-    print_header("Task 2: S3 Security")
+    print_header("Task 2: S3 Security (25 Marks)")
     try:
         buckets = s3.list_buckets()['Buckets']
         target_b = next((b['Name'] for b in buckets if f"s3-{student_name}" in b['Name']), None)
-        
         if target_b:
-            grade_step(f"Bucket Found ({target_b})", 5, True)
-            
+            grade_step(f"Bucket Found", 5, True)
             try:
                 pab = s3.get_public_access_block(Bucket=target_b)
                 conf = pab['PublicAccessBlockConfiguration']
                 is_blocked = conf['BlockPublicAcls'] and conf['IgnorePublicAcls'] and conf['BlockPublicPolicy'] and conf['RestrictPublicBuckets']
-                grade_step("Block All Public Access Enabled", 5, is_blocked)
-            except:
-                grade_step("Block All Public Access Enabled", 5, False, "Not configured")
+                grade_step("Block Public Access Enabled", 5, is_blocked)
+            except: grade_step("Block Public Access Enabled", 5, False)
 
             ver = s3.get_bucket_versioning(Bucket=target_b)
             grade_step("Versioning Enabled", 5, ver.get('Status') == 'Enabled')
-            
             try:
                 lc = s3.get_bucket_lifecycle_configuration(Bucket=target_b)
-                rules = lc.get('Rules', [])
-                has_ia = any(t.get('StorageClass') == 'STANDARD_IA' for r in rules for t in r.get('Transitions', []))
+                has_ia = any(t.get('StorageClass') == 'STANDARD_IA' for r in lc.get('Rules', []) for t in r.get('Transitions', []))
                 grade_step("Lifecycle Rule (Standard-IA)", 5, has_ia)
-            except:
-                grade_step("Lifecycle Rule (Standard-IA)", 5, False)
+            except: grade_step("Lifecycle Rule (Standard-IA)", 5, False)
 
             try:
                 s3.head_object(Bucket=target_b, Key='config.txt')
                 grade_step("File 'config.txt' Uploaded", 5, True)
-            except:
-                grade_step("File 'config.txt' Uploaded", 5, False)
+            except: grade_step("File 'config.txt' Uploaded", 5, False)
         else:
-            grade_step("Bucket Created", 5, False)
+            grade_step("Bucket Found", 5, False)
             grade_step("Block Public Access", 5, False)
-            grade_step("Versioning Enabled", 5, False)
-            grade_step("Lifecycle Rule", 5, False)
+            grade_step("Versioning", 5, False)
+            grade_step("Lifecycle", 5, False)
             grade_step("File Uploaded", 5, False)
-
     except Exception as e: print(f"Error Task 2: {e}")
 
     # ---------------------------------------------------------
-    # TASK 3: EC2 & USER DATA (25 Marks)
+    # TASK 3: EC2 WEB TIER (25 Marks)
     # ---------------------------------------------------------
-    print_header("Task 3: Web Tier Config")
+    print_header("Task 3: Web Tier Config (25 Marks)")
     try:
         lts = ec2.describe_launch_templates()['LaunchTemplates']
         target_lt = next((lt for lt in lts if f"lt-{student_name}" in lt['LaunchTemplateName']), None)
         
         if target_lt:
-            lt_id = target_lt['LaunchTemplateId']
-            ver = ec2.describe_launch_template_versions(LaunchTemplateId=lt_id)['LaunchTemplateVersions'][0]
+            ver = ec2.describe_launch_template_versions(LaunchTemplateId=target_lt['LaunchTemplateId'])['LaunchTemplateVersions'][0]
             data = ver['LaunchTemplateData']
             
-            # Instance Type Check (t3.small)
+            # Config Checks
             itype = data.get('InstanceType', 'Unknown')
-            grade_step("Instance Type is t3.small", 5, itype == 't3.small', f"Found: {itype}")
+            grade_step("Instance Type t3.small", 2, itype == 't3.small', f"Found: {itype}")
             
-            # LabInstanceProfile Check
             iam_prof = data.get('IamInstanceProfile', {}).get('Name', '') or data.get('IamInstanceProfile', {}).get('Arn', '')
-            grade_step("LabInstanceProfile Attached", 10, "LabInstanceProfile" in iam_prof)
+            grade_step("LabInstanceProfile Attached", 3, "LabInstanceProfile" in iam_prof)
             
-            ud = data.get('UserData', '')
-            grade_step("User Data Script Present", 10, bool(ud))
+            # Security Group Check (PARTIAL SCORING)
+            sg_ids = data.get('SecurityGroupIds', [])
+            sg_points = 0
+            sg_msg = "Security Group Not Found/Closed"
+            
+            if sg_ids:
+                sg_resp = ec2.describe_security_groups(GroupIds=sg_ids)['SecurityGroups'][0]
+                has_all = False
+                has_http = False
+                
+                for p in sg_resp['IpPermissions']:
+                    is_open = any(r.get('CidrIp') == '0.0.0.0/0' for r in p.get('IpRanges', []))
+                    if is_open:
+                        if p.get('IpProtocol') == '-1': has_all = True
+                        if p.get('FromPort') == 80: has_http = True
+                
+                if has_all:
+                    sg_points = 2
+                    sg_msg = "Partial: 'All Traffic' allowed (Insecure -3 marks)"
+                elif has_http:
+                    sg_points = 5
+                    sg_msg = "Perfect: Port 80 Open Only"
+            
+            global SCORED_MARKS
+            SCORED_MARKS += sg_points
+            if sg_points > 0:
+                print(f"[\u2713] PASS (+{sg_points}/5): Security Group - {sg_msg}")
+            else:
+                print(f"[X] FAIL (0/5): Security Group - {sg_msg}")
+
+            # Script Logic Checks (3 x 5 Marks)
+            ud_encoded = data.get('UserData', '')
+            if ud_encoded:
+                try:
+                    ud_script = base64.b64decode(ud_encoded).decode('utf-8').lower()
+                    grade_step("Script: Nginx Logic", 5, "nginx" in ud_script)
+                    grade_step("Script: S3 Logic", 5, ("aws" in ud_script or "s3" in ud_script))
+                    has_append = (">>" in ud_script) or ("cat" in ud_script) or ("index.html" in ud_script)
+                    grade_step("Script: Append/Write Logic", 5, has_append)
+                except:
+                    grade_step("Script: Nginx Logic", 5, False, "Encoding Error")
+                    grade_step("Script: S3 Logic", 5, False)
+                    grade_step("Script: Append Logic", 5, False)
+            else:
+                grade_step("Script: Nginx Logic", 5, False, "Empty")
+                grade_step("Script: S3 Logic", 5, False)
+                grade_step("Script: Append Logic", 5, False)
+
         else:
             grade_step("Launch Template Found", 0, False)
-            grade_step("Instance Type is t3.small", 5, False)
-            grade_step("LabInstanceProfile Attached", 10, False)
-            grade_step("User Data Present", 10, False)
-
+            grade_step("Instance Type t3.small", 2, False)
+            grade_step("LabInstanceProfile Attached", 3, False)
+            print("[X] FAIL (0/5): Security Group Not Found")
+            grade_step("Script: Logic Checks", 15, False)
+            
     except Exception as e: print(f"Error Task 3: {e}")
 
     # ---------------------------------------------------------
-    # TASK 4: ASG & WEB VERIFICATION (25 Marks)
+    # TASK 4: HA & FUNCTIONALITY (25 Marks)
     # ---------------------------------------------------------
-    print_header("Task 4: High Availability & Integration")
+    print_header("Task 4: High Availability (25 Marks)")
     alb_dns = None
     try:
         albs = elbv2.describe_load_balancers()['LoadBalancers']
         target_alb = next((a for a in albs if f"alb-{student_name}" in a['LoadBalancerName']), None)
         if target_alb:
             alb_dns = target_alb['DNSName']
-            grade_step("ALB Created", 5, True)
+            grade_step("ALB Created", 2, True)
         else:
-            grade_step("ALB Created", 5, False)
+            grade_step("ALB Created", 2, False)
 
         asgs = asg.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if f"asg-{student_name}" in a['AutoScalingGroupName']), None)
         
         if target_asg:
-            grade_step("ASG Created", 5, True)
+            grade_step("ASG Created", 3, True)
             
             pols = asg.describe_policies(AutoScalingGroupName=target_asg['AutoScalingGroupName'])['ScalingPolicies']
             has_tt = any(p['PolicyType'] == 'TargetTrackingScaling' for p in pols)
-            grade_step("Target Tracking Policy Configured", 5, has_tt)
+            grade_step("Scaling Policy Configured", 5, has_tt)
             
-            # FUNCTIONAL TEST (Passes both Name and ID to check function)
+            # SPLIT FUNCTIONAL CHECK (5 + 10)
             if alb_dns:
                 print(f"    Testing URL: http://{alb_dns}")
-                ok, msg = check_http_content(f"http://{alb_dns}", student_name, student_id)
-                grade_step("Web Page: Name & ID Found", 10, ok, msg)
+                has_name, has_id, msg = check_http_partial(f"http://{alb_dns}", student_name, student_id)
+                grade_step("Functional: Web Page Loads (Name)", 5, has_name, msg)
+                grade_step("Functional: S3 Data Visible (ID)", 10, has_id, msg)
             else:
-                grade_step("Web Page: Name & ID Found", 10, False)
+                grade_step("Functional: Web Page Loads (Name)", 5, False)
+                grade_step("Functional: S3 Data Visible (ID)", 10, False)
         else:
-            grade_step("ASG Created", 5, False)
+            grade_step("ASG Created", 3, False)
             grade_step("Scaling Policy", 5, False)
-            grade_step("Web Page: Name & ID Found", 10, False)
+            grade_step("Functional: Web Page Loads (Name)", 5, False)
+            grade_step("Functional: S3 Data Visible (ID)", 10, False)
 
     except Exception as e: print(f"Error Task 4: {e}")
 
