@@ -19,15 +19,13 @@ def grade_step(desc, points, condition, issue=""):
         print(f"[X] FAIL (0/{points}): {desc}")
         if issue: print(f"    -> Issue: {issue}")
 
-def check_http_partial(url, name, student_id):
+def check_http_robust(url, name_variations, student_id):
     try:
         with urllib.request.urlopen(url, timeout=5, context=ssl_context) as r:
             content = r.read().decode('utf-8').lower()
             
-            # Debug print (Optional, helps verify what the grader sees)
-            # print(f"DEBUG: Page Content -> {content[:100]}...") 
-            
-            found_name = name in content
+            # Check if ANY version of the name exists in the HTML
+            found_name = any(n in content for n in name_variations)
             found_id = student_id in content
             
             if found_name and found_id:
@@ -35,26 +33,32 @@ def check_http_partial(url, name, student_id):
             elif found_name:
                 return True, False, "Partial: Name found, but ID missing"
             elif found_id:
-                 # Logic update: If ID found but Name fuzzy, gives partial credit logic
-                 return False, True, "Partial: ID found, Name mismatch"
+                 return False, True, "Partial: ID found, Name mismatch (Check spelling on page)"
             else:
                 return False, False, "Fail: Name/ID not found (Content mismatch)"
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER (v14.1 FIX)")
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER (v14.2 ROBUST)")
     session = boto3.session.Session()
     print(f"Region: {session.region_name}")
     
-    # --- FIX APPLIED HERE ---
-    # We keep the raw input for HTML checks, and make a clean version for Resource checks
-    raw_name_input = input("Enter Student Name (as shown on web page): ").strip().lower()
-    student_name = raw_name_input.replace(" ", "") # Removes spaces for s3-lowchoonkeat, etc.
-    
+    # --- SMART INPUT HANDLING ---
+    raw_input = input("Enter Student Name: ").strip().lower()
     student_id = input("Enter Student ID: ").strip().lower()
+
+    # Create variations to check HTML (Handles spaces and no-spaces)
+    name_with_spaces = raw_input
+    name_no_spaces = raw_input.replace(" ", "")
     
-    print(f"\n[INFO] Checking Resources for: {student_name}")
-    print(f"[INFO] Checking Web Page for: '{raw_name_input}' and '{student_id}'\n")
+    # Variation list for HTML checking
+    html_name_checks = [name_with_spaces, name_no_spaces]
+
+    # Resource name MUST be no-spaces
+    resource_name = name_no_spaces
+    
+    print(f"\n[INFO] Resources ID: {resource_name}")
+    print(f"[INFO] Checking Web Page for: {html_name_checks}\n")
 
     ec2 = boto3.client('ec2')
     s3 = boto3.client('s3')
@@ -68,7 +72,7 @@ def main():
     print_header("Task 1: DynamoDB (25 Marks)")
     try:
         tbls = ddb.list_tables()['TableNames']
-        target_t = next((t for t in tbls if f"ddb-{student_name}" in t), None)
+        target_t = next((t for t in tbls if f"ddb-{resource_name}" in t), None)
         if target_t:
             grade_step(f"Table Found ({target_t})", 10, True)
             desc = ddb.describe_table(TableName=target_t)['Table']
@@ -90,7 +94,7 @@ def main():
     print_header("Task 2: S3 Security (25 Marks)")
     try:
         buckets = s3.list_buckets()['Buckets']
-        target_b = next((b['Name'] for b in buckets if f"s3-{student_name}" in b['Name']), None)
+        target_b = next((b['Name'] for b in buckets if f"s3-{resource_name}" in b['Name']), None)
         if target_b:
             grade_step(f"Bucket Found", 2, True)
             
@@ -128,7 +132,7 @@ def main():
     print_header("Task 3: Web Tier Config (25 Marks)")
     try:
         lts = ec2.describe_launch_templates()['LaunchTemplates']
-        target_lt = next((lt for lt in lts if f"lt-{student_name}" in lt['LaunchTemplateName']), None)
+        target_lt = next((lt for lt in lts if f"lt-{resource_name}" in lt['LaunchTemplateName']), None)
         
         if target_lt:
             ver = ec2.describe_launch_template_versions(LaunchTemplateId=target_lt['LaunchTemplateId'])['LaunchTemplateVersions'][0]
@@ -191,7 +195,7 @@ def main():
     alb_dns = None
     try:
         albs = elbv2.describe_load_balancers()['LoadBalancers']
-        target_alb = next((a for a in albs if f"alb-{student_name}" in a['LoadBalancerName']), None)
+        target_alb = next((a for a in albs if f"alb-{resource_name}" in a['LoadBalancerName']), None)
         if target_alb:
             alb_dns = target_alb['DNSName']
             grade_step("ALB Created", 2, True)
@@ -199,7 +203,7 @@ def main():
             grade_step("ALB Created", 2, False)
 
         asgs = asg.describe_auto_scaling_groups()['AutoScalingGroups']
-        target_asg = next((a for a in asgs if f"asg-{student_name}" in a['AutoScalingGroupName']), None)
+        target_asg = next((a for a in asgs if f"asg-{resource_name}" in a['AutoScalingGroupName']), None)
         if target_asg:
             # Strict Capacity Check (2/2/4)
             real_min, real_max, real_des = target_asg.get('MinSize'), target_asg.get('MaxSize'), target_asg.get('DesiredCapacity')
@@ -216,11 +220,11 @@ def main():
                     if t_val == 60.0: policy_ok = True; break
             grade_step("Scaling Policy (CPU 60%)", 5, policy_ok, f"Found Target: {found_val}%")
             
-            # Split Functional Check - USES RAW NAME
+            # Split Functional Check - ROBUST NAME CHECK
             if alb_dns:
                 print(f"    Testing URL: http://{alb_dns}")
-                # Pass raw_name_input (with spaces) to the checker
-                has_name, has_id, msg = check_http_partial(f"http://{alb_dns}", raw_name_input, student_id)
+                # Pass BOTH name variations to the checker
+                has_name, has_id, msg = check_http_robust(f"http://{alb_dns}", html_name_checks, student_id)
                 grade_step("Functional: Web Page Loads (Name)", 5, has_name, msg)
                 grade_step("Functional: S3 Data Visible (ID)", 10, has_id, msg)
             else:
