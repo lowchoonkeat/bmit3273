@@ -23,6 +23,10 @@ def check_http_partial(url, name, student_id):
     try:
         with urllib.request.urlopen(url, timeout=5, context=ssl_context) as r:
             content = r.read().decode('utf-8').lower()
+            
+            # Debug print (Optional, helps verify what the grader sees)
+            # print(f"DEBUG: Page Content -> {content[:100]}...") 
+            
             found_name = name in content
             found_id = student_id in content
             
@@ -30,18 +34,28 @@ def check_http_partial(url, name, student_id):
                 return True, True, "Success: Name AND ID found"
             elif found_name:
                 return True, False, "Partial: Name found, but ID missing"
+            elif found_id:
+                 # Logic update: If ID found but Name fuzzy, gives partial credit logic
+                 return False, True, "Partial: ID found, Name mismatch"
             else:
-                return False, False, "Fail: Name not found (Nginx Default or Error)"
+                return False, False, "Fail: Name/ID not found (Content mismatch)"
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER (HA OPTIMIZED)")
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER (v14.1 FIX)")
     session = boto3.session.Session()
     print(f"Region: {session.region_name}")
     
-    student_name = input("Enter Student Name: ").strip().lower().replace(" ", "")
+    # --- FIX APPLIED HERE ---
+    # We keep the raw input for HTML checks, and make a clean version for Resource checks
+    raw_name_input = input("Enter Student Name (as shown on web page): ").strip().lower()
+    student_name = raw_name_input.replace(" ", "") # Removes spaces for s3-lowchoonkeat, etc.
+    
     student_id = input("Enter Student ID: ").strip().lower()
     
+    print(f"\n[INFO] Checking Resources for: {student_name}")
+    print(f"[INFO] Checking Web Page for: '{raw_name_input}' and '{student_id}'\n")
+
     ec2 = boto3.client('ec2')
     s3 = boto3.client('s3')
     ddb = boto3.client('dynamodb')
@@ -202,10 +216,11 @@ def main():
                     if t_val == 60.0: policy_ok = True; break
             grade_step("Scaling Policy (CPU 60%)", 5, policy_ok, f"Found Target: {found_val}%")
             
-            # Split Functional Check
+            # Split Functional Check - USES RAW NAME
             if alb_dns:
                 print(f"    Testing URL: http://{alb_dns}")
-                has_name, has_id, msg = check_http_partial(f"http://{alb_dns}", student_name, student_id)
+                # Pass raw_name_input (with spaces) to the checker
+                has_name, has_id, msg = check_http_partial(f"http://{alb_dns}", raw_name_input, student_id)
                 grade_step("Functional: Web Page Loads (Name)", 5, has_name, msg)
                 grade_step("Functional: S3 Data Visible (ID)", 10, has_id, msg)
             else:
