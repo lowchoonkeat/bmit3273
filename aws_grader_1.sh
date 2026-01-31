@@ -19,46 +19,43 @@ def grade_step(desc, points, condition, issue=""):
         print(f"[X] FAIL (0/{points}): {desc}")
         if issue: print(f"    -> Issue: {issue}")
 
-def check_http_robust(url, name_variations, student_id):
+def check_http_final(url, clean_name, student_id):
     try:
         with urllib.request.urlopen(url, timeout=5, context=ssl_context) as r:
-            content = r.read().decode('utf-8').lower()
+            raw_html = r.read().decode('utf-8').lower()
             
-            # Check if ANY version of the name exists in the HTML
-            found_name = any(n in content for n in name_variations)
-            found_id = student_id in content
+            # --- THE FIX: REMOVE SPACES FROM HTML BEFORE CHECKING ---
+            # This turns "Name: Low Choon Keat" into "name:lowchoonkeat"
+            clean_html = raw_html.replace(" ", "").replace("\n", "")
+            
+            # Now we look for "lowchoonkeat" inside "name:lowchoonkeat"
+            found_name = clean_name in clean_html
+            found_id = student_id in raw_html # ID checks are usually simple (numbers)
             
             if found_name and found_id:
                 return True, True, "Success: Name AND ID found"
             elif found_name:
                 return True, False, "Partial: Name found, but ID missing"
             elif found_id:
-                 return False, True, "Partial: ID found, Name mismatch (Check spelling on page)"
+                 return False, True, f"Partial: ID found, Name '{clean_name}' not found in page text"
             else:
                 return False, False, "Fail: Name/ID not found (Content mismatch)"
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER (v14.2 ROBUST)")
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER (v15.0 FINAL)")
     session = boto3.session.Session()
     print(f"Region: {session.region_name}")
     
-    # --- SMART INPUT HANDLING ---
+    # --- INPUT HANDLING ---
+    # We strip spaces immediately. "Low Choon Keat" -> "lowchoonkeat"
     raw_input = input("Enter Student Name: ").strip().lower()
+    student_name_clean = raw_input.replace(" ", "") 
+    
     student_id = input("Enter Student ID: ").strip().lower()
 
-    # Create variations to check HTML (Handles spaces and no-spaces)
-    name_with_spaces = raw_input
-    name_no_spaces = raw_input.replace(" ", "")
-    
-    # Variation list for HTML checking
-    html_name_checks = [name_with_spaces, name_no_spaces]
-
-    # Resource name MUST be no-spaces
-    resource_name = name_no_spaces
-    
-    print(f"\n[INFO] Resources ID: {resource_name}")
-    print(f"[INFO] Checking Web Page for: {html_name_checks}\n")
+    print(f"\n[INFO] Checking Resources for: {student_name_clean}")
+    print(f"[INFO] Checking Web Page for: '{student_name_clean}' (Space-Insensitive Mode)\n")
 
     ec2 = boto3.client('ec2')
     s3 = boto3.client('s3')
@@ -72,7 +69,7 @@ def main():
     print_header("Task 1: DynamoDB (25 Marks)")
     try:
         tbls = ddb.list_tables()['TableNames']
-        target_t = next((t for t in tbls if f"ddb-{resource_name}" in t), None)
+        target_t = next((t for t in tbls if f"ddb-{student_name_clean}" in t), None)
         if target_t:
             grade_step(f"Table Found ({target_t})", 10, True)
             desc = ddb.describe_table(TableName=target_t)['Table']
@@ -94,7 +91,7 @@ def main():
     print_header("Task 2: S3 Security (25 Marks)")
     try:
         buckets = s3.list_buckets()['Buckets']
-        target_b = next((b['Name'] for b in buckets if f"s3-{resource_name}" in b['Name']), None)
+        target_b = next((b['Name'] for b in buckets if f"s3-{student_name_clean}" in b['Name']), None)
         if target_b:
             grade_step(f"Bucket Found", 2, True)
             
@@ -132,7 +129,7 @@ def main():
     print_header("Task 3: Web Tier Config (25 Marks)")
     try:
         lts = ec2.describe_launch_templates()['LaunchTemplates']
-        target_lt = next((lt for lt in lts if f"lt-{resource_name}" in lt['LaunchTemplateName']), None)
+        target_lt = next((lt for lt in lts if f"lt-{student_name_clean}" in lt['LaunchTemplateName']), None)
         
         if target_lt:
             ver = ec2.describe_launch_template_versions(LaunchTemplateId=target_lt['LaunchTemplateId'])['LaunchTemplateVersions'][0]
@@ -195,7 +192,7 @@ def main():
     alb_dns = None
     try:
         albs = elbv2.describe_load_balancers()['LoadBalancers']
-        target_alb = next((a for a in albs if f"alb-{resource_name}" in a['LoadBalancerName']), None)
+        target_alb = next((a for a in albs if f"alb-{student_name_clean}" in a['LoadBalancerName']), None)
         if target_alb:
             alb_dns = target_alb['DNSName']
             grade_step("ALB Created", 2, True)
@@ -203,7 +200,7 @@ def main():
             grade_step("ALB Created", 2, False)
 
         asgs = asg.describe_auto_scaling_groups()['AutoScalingGroups']
-        target_asg = next((a for a in asgs if f"asg-{resource_name}" in a['AutoScalingGroupName']), None)
+        target_asg = next((a for a in asgs if f"asg-{student_name_clean}" in a['AutoScalingGroupName']), None)
         if target_asg:
             # Strict Capacity Check (2/2/4)
             real_min, real_max, real_des = target_asg.get('MinSize'), target_asg.get('MaxSize'), target_asg.get('DesiredCapacity')
@@ -220,11 +217,11 @@ def main():
                     if t_val == 60.0: policy_ok = True; break
             grade_step("Scaling Policy (CPU 60%)", 5, policy_ok, f"Found Target: {found_val}%")
             
-            # Split Functional Check - ROBUST NAME CHECK
+            # Split Functional Check - SPACE INSENSITIVE
             if alb_dns:
                 print(f"    Testing URL: http://{alb_dns}")
-                # Pass BOTH name variations to the checker
-                has_name, has_id, msg = check_http_robust(f"http://{alb_dns}", html_name_checks, student_id)
+                # Pass clean_name (lowchoonkeat) to check against clean_html
+                has_name, has_id, msg = check_http_final(f"http://{alb_dns}", student_name_clean, student_id)
                 grade_step("Functional: Web Page Loads (Name)", 5, has_name, msg)
                 grade_step("Functional: S3 Data Visible (ID)", 10, has_id, msg)
             else:
