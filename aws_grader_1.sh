@@ -35,7 +35,7 @@ def check_http_partial(url, name, student_id):
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER")
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER (STRICT)")
     session = boto3.session.Session()
     print(f"Region: {session.region_name}")
     
