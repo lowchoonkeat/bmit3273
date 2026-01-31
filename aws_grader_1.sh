@@ -23,7 +23,6 @@ def check_http_partial(url, name, student_id):
     try:
         with urllib.request.urlopen(url, timeout=5, context=ssl_context) as r:
             content = r.read().decode('utf-8').lower()
-            
             found_name = name in content
             found_id = student_id in content
             
@@ -33,15 +32,12 @@ def check_http_partial(url, name, student_id):
                 return True, False, "Partial: Name found, but ID missing"
             else:
                 return False, False, "Fail: Name not found (Nginx Default or Error)"
-                
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER (VERSION 10.0)")
-    
+    print_header("BMIT3273 JAN 2026 - FINAL GRADER")
     session = boto3.session.Session()
-    region = session.region_name
-    print(f"Region: {region}")
+    print(f"Region: {session.region_name}")
     
     student_name = input("Enter Student Name: ").strip().lower().replace(" ", "")
     student_id = input("Enter Student ID: ").strip().lower()
@@ -65,13 +61,8 @@ def main():
             pk = next((k['AttributeName'] for k in desc['KeySchema'] if k['KeyType'] == 'HASH'), None)
             grade_step("Partition Key 'student_id'", 5, pk == 'student_id')
             
-            # Case Insensitive Check
             scan = ddb.scan(TableName=target_t)
-            has_item = False
-            for i in scan.get('Items', []):
-                status_val = i.get('status', {}).get('S', '').lower()
-                if status_val == 'active':
-                    has_item = True
+            has_item = any(i.get('status', {}).get('S', '').lower() == 'active' for i in scan.get('Items', []))
             grade_step("Item Added (active/Active)", 10, has_item)
         else:
             grade_step("Table Found", 10, False)
@@ -89,13 +80,10 @@ def main():
         if target_b:
             grade_step(f"Bucket Found", 2, True)
             
-            # Tagging Check (Replaces Block Public Access)
+            # Active Tag Check
             try:
                 tags = s3.get_bucket_tagging(Bucket=target_b)['TagSet']
-                has_tag = False
-                for t in tags:
-                    if t['Key'].lower() == 'project' and t['Value'].lower() == 'finalassessment':
-                        has_tag = True
+                has_tag = any(t['Key'].lower() == 'project' and t['Value'].lower() == 'finalassessment' for t in tags)
                 grade_step("Tag Added (Project: FinalAssessment)", 4, has_tag)
             except: grade_step("Tag Added (Project: FinalAssessment)", 4, False, "No Tags")
 
@@ -132,40 +120,32 @@ def main():
             ver = ec2.describe_launch_template_versions(LaunchTemplateId=target_lt['LaunchTemplateId'])['LaunchTemplateVersions'][0]
             data = ver['LaunchTemplateData']
             
-            # Config Checks
             itype = data.get('InstanceType', 'Unknown')
             grade_step("Instance Type t3.small", 2, itype == 't3.small', f"Found: {itype}")
             
             iam_prof = data.get('IamInstanceProfile', {}).get('Name', '') or data.get('IamInstanceProfile', {}).get('Arn', '')
             grade_step("LabInstanceProfile Attached", 3, "LabInstanceProfile" in iam_prof)
             
-            # Security Group Check (Partial Scoring)
+            # Partial Security Group Scoring
             sg_ids = data.get('SecurityGroupIds', [])
             sg_points = 0
             sg_msg = "SG Not Found/Closed"
-            
             if sg_ids:
                 sg_resp = ec2.describe_security_groups(GroupIds=sg_ids)['SecurityGroups'][0]
-                has_all = False
-                has_http = False
+                has_all, has_http = False, False
                 for p in sg_resp['IpPermissions']:
                     is_open = any(r.get('CidrIp') == '0.0.0.0/0' for r in p.get('IpRanges', []))
                     if is_open:
                         if p.get('IpProtocol') == '-1': has_all = True
                         if p.get('FromPort') == 80: has_http = True
-                
-                if has_all:
-                    sg_points = 2
-                    sg_msg = "Partial: 'All Traffic' (-3 Marks)"
-                elif has_http:
-                    sg_points = 5
-                    sg_msg = "Perfect: Port 80 Open"
+                if has_all: sg_points, sg_msg = 2, "Partial: 'All Traffic' (-3 Marks)"
+                elif has_http: sg_points, sg_msg = 5, "Perfect: Port 80 Open"
             
             global SCORED_MARKS
             SCORED_MARKS += sg_points
             print(f"[{'✓' if sg_points>0 else 'X'}] PASS/PARTIAL (+{sg_points}/5): Security Group - {sg_msg}")
 
-            # Script Logic Checks (3 x 5 Marks)
+            # 3-Part Script Check
             ud_encoded = data.get('UserData', '')
             if ud_encoded:
                 try:
@@ -182,18 +162,16 @@ def main():
                 grade_step("Script: Nginx Logic", 5, False, "Empty")
                 grade_step("Script: S3 Logic", 5, False)
                 grade_step("Script: Append Logic", 5, False)
-
         else:
             grade_step("Launch Template Found", 0, False)
             grade_step("Instance Type t3.small", 2, False)
             grade_step("LabInstanceProfile Attached", 3, False)
             print("[X] FAIL (0/5): Security Group Not Found")
             grade_step("Script: Logic Checks", 15, False)
-            
     except Exception as e: print(f"Error Task 3: {e}")
 
     # ---------------------------------------------------------
-    # TASK 4: HA & FUNCTIONALITY (25 Marks)
+    # TASK 4: HIGH AVAILABILITY (25 Marks) - STRICT CHECKS
     # ---------------------------------------------------------
     print_header("Task 4: High Availability (25 Marks)")
     alb_dns = None
@@ -208,13 +186,21 @@ def main():
 
         asgs = asg.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if f"asg-{student_name}" in a['AutoScalingGroupName']), None)
-        
         if target_asg:
-            grade_step("ASG Created", 3, True)
+            # Strict Capacity Check
+            real_min, real_max, real_des = target_asg.get('MinSize'), target_asg.get('MaxSize'), target_asg.get('DesiredCapacity')
+            cap_ok = (real_min == 1 and real_des == 2 and real_max == 4)
+            grade_step(f"ASG Capacity (1/2/4)", 3, cap_ok, f"Found Min:{real_min}, Des:{real_des}, Max:{real_max}")
             
+            # Strict Scaling Check
             pols = asg.describe_policies(AutoScalingGroupName=target_asg['AutoScalingGroupName'])['ScalingPolicies']
-            has_tt = any(p['PolicyType'] == 'TargetTrackingScaling' for p in pols)
-            grade_step("Scaling Policy Configured", 5, has_tt)
+            policy_ok, found_val = False, "None"
+            for p in pols:
+                if p['PolicyType'] == 'TargetTrackingScaling':
+                    t_val = p.get('TargetTrackingConfiguration', {}).get('TargetValue', 0.0)
+                    found_val = t_val
+                    if t_val == 50.0: policy_ok = True; break
+            grade_step("Scaling Policy (CPU 50%)", 5, policy_ok, f"Found Target: {found_val}%")
             
             # Split Functional Check
             if alb_dns:
@@ -226,11 +212,10 @@ def main():
                 grade_step("Functional: Web Page Loads (Name)", 5, False)
                 grade_step("Functional: S3 Data Visible (ID)", 10, False)
         else:
-            grade_step("ASG Created", 3, False)
-            grade_step("Scaling Policy", 5, False)
+            grade_step("ASG Capacity (1/2/4)", 3, False)
+            grade_step("Scaling Policy (CPU 50%)", 5, False)
             grade_step("Functional: Web Page Loads (Name)", 5, False)
             grade_step("Functional: S3 Data Visible (ID)", 10, False)
-
     except Exception as e: print(f"Error Task 4: {e}")
 
     print_header("FINAL RESULT")
