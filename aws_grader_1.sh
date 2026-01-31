@@ -23,14 +23,9 @@ def check_http_final(url, clean_name, student_id):
     try:
         with urllib.request.urlopen(url, timeout=5, context=ssl_context) as r:
             raw_html = r.read().decode('utf-8').lower()
-            
-            # --- THE FIX: REMOVE SPACES FROM HTML BEFORE CHECKING ---
-            # This turns "Name: Low Choon Keat" into "name:lowchoonkeat"
             clean_html = raw_html.replace(" ", "").replace("\n", "")
-            
-            # Now we look for "lowchoonkeat" inside "name:lowchoonkeat"
             found_name = clean_name in clean_html
-            found_id = student_id in raw_html # ID checks are usually simple (numbers)
+            found_id = student_id in raw_html
             
             if found_name and found_id:
                 return True, True, "Success: Name AND ID found"
@@ -43,15 +38,13 @@ def check_http_final(url, clean_name, student_id):
     except Exception as e: return False, False, str(e)
 
 def main():
-    print_header("BMIT3273 JAN 2026 - FINAL GRADER (v15.0 FINAL)")
+    # --- UPDATED HEADER (GENERAL) ---
+    print_header("BMIT3273 - FINAL ASSESSMENT GRADER")
     session = boto3.session.Session()
     print(f"Region: {session.region_name}")
     
-    # --- INPUT HANDLING ---
-    # We strip spaces immediately. "Low Choon Keat" -> "lowchoonkeat"
     raw_input = input("Enter Student Name: ").strip().lower()
     student_name_clean = raw_input.replace(" ", "") 
-    
     student_id = input("Enter Student ID: ").strip().lower()
 
     print(f"\n[INFO] Checking Resources for: {student_name_clean}")
@@ -63,9 +56,7 @@ def main():
     asg = boto3.client('autoscaling')
     elbv2 = boto3.client('elbv2')
 
-    # ---------------------------------------------------------
-    # TASK 1: DYNAMODB (25 Marks)
-    # ---------------------------------------------------------
+    # TASK 1: DYNAMODB
     print_header("Task 1: DynamoDB (25 Marks)")
     try:
         tbls = ddb.list_tables()['TableNames']
@@ -75,7 +66,6 @@ def main():
             desc = ddb.describe_table(TableName=target_t)['Table']
             pk = next((k['AttributeName'] for k in desc['KeySchema'] if k['KeyType'] == 'HASH'), None)
             grade_step("Partition Key 'student_id'", 5, pk == 'student_id')
-            
             scan = ddb.scan(TableName=target_t)
             has_item = any(i.get('status', {}).get('S', '').lower() == 'active' for i in scan.get('Items', []))
             grade_step("Item Added (active/Active)", 10, has_item)
@@ -85,17 +75,13 @@ def main():
             grade_step("Item Added", 10, False)
     except Exception as e: print(f"Error Task 1: {e}")
 
-    # ---------------------------------------------------------
-    # TASK 2: S3 SECURITY (25 Marks)
-    # ---------------------------------------------------------
+    # TASK 2: S3 SECURITY
     print_header("Task 2: S3 Security (25 Marks)")
     try:
         buckets = s3.list_buckets()['Buckets']
         target_b = next((b['Name'] for b in buckets if f"s3-{student_name_clean}" in b['Name']), None)
         if target_b:
-            grade_step(f"Bucket Found", 2, True)
-            
-            # Active Tag Check
+            grade_step(f"Bucket Found ({target_b})", 2, True)
             try:
                 tags = s3.get_bucket_tagging(Bucket=target_b)['TagSet']
                 has_tag = any(t['Key'].lower() == 'project' and t['Value'].lower() == 'finalassessment' for t in tags)
@@ -123,9 +109,7 @@ def main():
             grade_step("File Uploaded", 5, False)
     except Exception as e: print(f"Error Task 2: {e}")
 
-    # ---------------------------------------------------------
-    # TASK 3: EC2 WEB TIER (25 Marks)
-    # ---------------------------------------------------------
+    # TASK 3: EC2 WEB TIER
     print_header("Task 3: Web Tier Config (25 Marks)")
     try:
         lts = ec2.describe_launch_templates()['LaunchTemplates']
@@ -134,14 +118,12 @@ def main():
         if target_lt:
             ver = ec2.describe_launch_template_versions(LaunchTemplateId=target_lt['LaunchTemplateId'])['LaunchTemplateVersions'][0]
             data = ver['LaunchTemplateData']
-            
             itype = data.get('InstanceType', 'Unknown')
             grade_step("Instance Type t3.small", 2, itype == 't3.small', f"Found: {itype}")
             
             iam_prof = data.get('IamInstanceProfile', {}).get('Name', '') or data.get('IamInstanceProfile', {}).get('Arn', '')
             grade_step("LabInstanceProfile Attached", 3, "LabInstanceProfile" in iam_prof)
             
-            # Partial Security Group Scoring
             sg_ids = data.get('SecurityGroupIds', [])
             sg_points = 0
             sg_msg = "SG Not Found/Closed"
@@ -160,7 +142,6 @@ def main():
             SCORED_MARKS += sg_points
             print(f"[{'✓' if sg_points>0 else 'X'}] PASS/PARTIAL (+{sg_points}/5): Security Group - {sg_msg}")
 
-            # 3-Part Script Check
             ud_encoded = data.get('UserData', '')
             if ud_encoded:
                 try:
@@ -185,9 +166,7 @@ def main():
             grade_step("Script: Logic Checks", 15, False)
     except Exception as e: print(f"Error Task 3: {e}")
 
-    # ---------------------------------------------------------
-    # TASK 4: HIGH AVAILABILITY (25 Marks) - STRICT 2/2/4 & 60%
-    # ---------------------------------------------------------
+    # TASK 4: HIGH AVAILABILITY
     print_header("Task 4: High Availability (25 Marks)")
     alb_dns = None
     try:
@@ -202,12 +181,10 @@ def main():
         asgs = asg.describe_auto_scaling_groups()['AutoScalingGroups']
         target_asg = next((a for a in asgs if f"asg-{student_name_clean}" in a['AutoScalingGroupName']), None)
         if target_asg:
-            # Strict Capacity Check (2/2/4)
             real_min, real_max, real_des = target_asg.get('MinSize'), target_asg.get('MaxSize'), target_asg.get('DesiredCapacity')
             cap_ok = (real_min == 2 and real_des == 2 and real_max == 4)
             grade_step(f"ASG Capacity (2/2/4)", 3, cap_ok, f"Found Min:{real_min}, Des:{real_des}, Max:{real_max}")
             
-            # Strict Scaling Check (CPU 60.0)
             pols = asg.describe_policies(AutoScalingGroupName=target_asg['AutoScalingGroupName'])['ScalingPolicies']
             policy_ok, found_val = False, "None"
             for p in pols:
@@ -217,10 +194,8 @@ def main():
                     if t_val == 60.0: policy_ok = True; break
             grade_step("Scaling Policy (CPU 60%)", 5, policy_ok, f"Found Target: {found_val}%")
             
-            # Split Functional Check - SPACE INSENSITIVE
             if alb_dns:
                 print(f"    Testing URL: http://{alb_dns}")
-                # Pass clean_name (lowchoonkeat) to check against clean_html
                 has_name, has_id, msg = check_http_final(f"http://{alb_dns}", student_name_clean, student_id)
                 grade_step("Functional: Web Page Loads (Name)", 5, has_name, msg)
                 grade_step("Functional: S3 Data Visible (ID)", 10, has_id, msg)
