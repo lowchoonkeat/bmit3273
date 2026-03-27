@@ -10,10 +10,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# ═══════════════════════════════════════════════════════════════
-#  BMIT3273 CLOUD COMPUTING — PRACTICAL TEST SET 2 AUTO GRADER
+# ===============================================================
+#  BMIT3273 CLOUD COMPUTING - PRACTICAL TEST SET 2 AUTO GRADER
 #  Topics: VPC & Networking | EC2 Web Server | EFS | EBS
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 ssl_ctx = ssl._create_unverified_context()
 SCORE = 0
@@ -21,23 +21,23 @@ SCORE = 0
 G  = '\033[92m';  R  = '\033[91m';  Y  = '\033[93m'
 C  = '\033[96m';  B  = '\033[1m';   W  = '\033[97m';  X  = '\033[0m'
 
-def banner(t): print(f"\n{C}{B}{'═'*60}\n  {t}\n{'═'*60}{X}")
-def section(t): print(f"\n{C}{'─'*60}\n  {t}\n{'─'*60}{X}")
+def banner(t): print(f"\n{C}{B}{'='*60}\n  {t}\n{'='*60}{X}")
+def section(t): print(f"\n{C}{'-'*60}\n  {t}\n{'-'*60}{X}")
 
 def ok(d, p):
     global SCORE; SCORE += p
-    print(f"  {G}[✓] +{p:2d}  {d}{X}"); return p
+    print(f"  {G}[OK] +{p:2d}  {d}{X}"); return p
 
 def fail(d, p, r=""):
-    print(f"  {R}[✗]  0/{p:<2d} {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    print(f"  {R}[X]  0/{p:<2d} {d}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return 0
 
 def partial(d, earned, total, r=""):
     global SCORE; SCORE += earned
     sym = Y if earned > 0 else R
     print(f"  {sym}[~] +{earned}/{total}  {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return earned
 
 def tag_val(tags, key):
@@ -48,7 +48,7 @@ def tag_val(tags, key):
 
 
 def main():
-    banner("BMIT3273 CLOUD COMPUTING — SET 2")
+    banner("BMIT3273 CLOUD COMPUTING - SET 2")
     print(f"  {W}Topics: VPC | EC2 Web Server | EFS | EBS{X}")
 
     session = boto3.session.Session()
@@ -64,10 +64,10 @@ def main():
     efs = boto3.client('efs')
     task_scores = {}
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 1 — CUSTOM VPC & NETWORKING (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 1: Custom VPC & Networking (25 Marks)")
+    # ==========================================================
+    # QUESTION 1 - CUSTOM VPC & NETWORKING (25 MARKS)
+    # ==========================================================
+    section("Question 1: Custom VPC & Networking")
     t1 = 0
     target_vpc_id = None
     try:
@@ -155,21 +155,21 @@ def main():
             has_igw_route = any(
                 r.get('DestinationCidrBlock') == '0.0.0.0/0' and 'igw-' in r.get('GatewayId', '')
                 for r in routes)
-            t1 += ok("Route 0.0.0.0/0 → IGW", 3) if has_igw_route \
+            t1 += ok("Route 0.0.0.0/0 -> IGW", 3) if has_igw_route \
                 else fail("Route to IGW", 3)
         else:
             t1 += fail("Route Table", 3, f"No 'rtb-{name}'")
             t1 += fail("Route", 3)
     except Exception as e:
-        print(f"  {R}Error Task 1: {e}{X}")
+        print(f"  {R}Error Question 1: {e}{X}")
 
-    task_scores['Task 1: VPC          '] = t1
-    print(f"\n  {B}Task 1 Subtotal: {t1} / 25{X}")
+    task_scores['Question 1: VPC          '] = t1
+    print(f"\n  {B}Question 1 Subtotal: {t1} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 2 — EC2 WITH WEB SERVER (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 2: EC2 Instance with Web Server (25 Marks)")
+    # ==========================================================
+    # QUESTION 2 - EC2 WITH WEB SERVER (25 MARKS)
+    # ==========================================================
+    section("Question 2: EC2 Instance with Web Server")
     t2 = 0
     target_ec2 = None
     try:
@@ -275,15 +275,15 @@ def main():
             for d, p in [("Type", 2), ("VPC", 3), ("Profile", 2), ("UserData", 3), ("Web page", 5)]:
                 t2 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 2: {e}{X}")
+        print(f"  {R}Error Question 2: {e}{X}")
 
-    task_scores['Task 2: EC2 Web      '] = t2
-    print(f"\n  {B}Task 2 Subtotal: {t2} / 25{X}")
+    task_scores['Question 2: EC2 Web      '] = t2
+    print(f"\n  {B}Question 2 Subtotal: {t2} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 3 — EFS FILE SYSTEM (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 3: EFS File System (25 Marks)")
+    # ==========================================================
+    # QUESTION 3 - EFS FILE SYSTEM (25 MARKS)
+    # ==========================================================
+    section("Question 3: EFS File System")
     t3 = 0
     try:
         fss = efs.describe_file_systems()['FileSystems']
@@ -323,15 +323,15 @@ def main():
             for d, p in [("Performance", 3), ("Tag", 5), ("Mount target", 10)]:
                 t3 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 3: {e}{X}")
+        print(f"  {R}Error Question 3: {e}{X}")
 
-    task_scores['Task 3: EFS          '] = t3
-    print(f"\n  {B}Task 3 Subtotal: {t3} / 25{X}")
+    task_scores['Question 3: EFS          '] = t3
+    print(f"\n  {B}Question 3 Subtotal: {t3} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 4 — EBS VOLUME & SNAPSHOT (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 4: EBS Volume & Snapshot (25 Marks)")
+    # ==========================================================
+    # QUESTION 4 - EBS VOLUME & SNAPSHOT (25 MARKS)
+    # ==========================================================
+    section("Question 4: EBS Volume & Snapshot")
     t4 = 0
     try:
         vols = ec2.describe_volumes()['Volumes']
@@ -406,21 +406,21 @@ def main():
             t4 += fail("Snapshot", 4, f"No 'snap-{name}'")
             t4 += fail("Snap Tag", 3)
     except Exception as e:
-        print(f"  {R}Error Task 4: {e}{X}")
+        print(f"  {R}Error Question 4: {e}{X}")
 
-    task_scores['Task 4: EBS          '] = t4
-    print(f"\n  {B}Task 4 Subtotal: {t4} / 25{X}")
+    task_scores['Question 4: EBS          '] = t4
+    print(f"\n  {B}Question 4 Subtotal: {t4} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
+    # ==========================================================
     banner("FINAL RESULT")
     for task, score in task_scores.items():
-        filled = int(score * 10 / 25); bar = '█' * filled + '░' * (10 - filled)
+        filled = int(score * 10 / 25); bar = '#' * filled + '-' * (10 - filled)
         print(f"  {task} {bar} {score:2d}/25")
-    print(f"\n  {'─'*44}")
+    print(f"\n  {'-'*44}")
     color = G if SCORE >= 80 else (Y if SCORE >= 50 else R)
     print(f"  {color}{B}  TOTAL SCORE :  {SCORE} / 100{X}")
-    print(f"  {'─'*44}")
-    if SCORE == 100: print(f"\n  {G}{B}  ★  PERFECT SCORE — Excellent work!  ★{X}")
+    print(f"  {'-'*44}")
+    if SCORE == 100: print(f"\n  {G}{B}  *  PERFECT SCORE - Excellent work!  *{X}")
     elif SCORE >= 80: print(f"\n  {G}  Great job!{X}")
     elif SCORE >= 50: print(f"\n  {Y}  Decent progress.{X}")
     else: print(f"\n  {R}  Needs improvement.{X}")
@@ -429,3 +429,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -9,15 +9,15 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# ═══════════════════════════════════════════════════════════════
-#  BMIT3273 CLOUD COMPUTING — PRACTICAL TEST SET 4 AUTO GRADER
+# ===============================================================
+#  BMIT3273 CLOUD COMPUTING - PRACTICAL TEST SET 4 AUTO GRADER
 #  Topics: VPC Networking | EC2 Web Server | Lambda | EBS
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 ssl_ctx = ssl._create_unverified_context()
 SCORE = 0
 
-# ── ANSI colours (CloudShell supports these) ──
+# -- ANSI colours (CloudShell supports these) --
 G  = '\033[92m'   # green
 R  = '\033[91m'   # red
 Y  = '\033[93m'   # yellow
@@ -26,25 +26,25 @@ B  = '\033[1m'    # bold
 W  = '\033[97m'   # white
 X  = '\033[0m'    # reset
 
-# ── Output helpers ──
+# -- Output helpers --
 def banner(t):
-    print(f"\n{C}{B}{'═'*60}")
+    print(f"\n{C}{B}{'='*60}")
     print(f"  {t}")
-    print(f"{'═'*60}{X}")
+    print(f"{'='*60}{X}")
 
 def section(t):
-    print(f"\n{C}{'─'*60}")
+    print(f"\n{C}{'-'*60}")
     print(f"  {t}")
-    print(f"{'─'*60}{X}")
+    print(f"{'-'*60}{X}")
 
 def ok(d, p):
     global SCORE; SCORE += p
-    print(f"  {G}[✓] +{p:2d}  {d}{X}")
+    print(f"  {G}[OK] +{p:2d}  {d}{X}")
     return p
 
 def fail(d, p, r=""):
-    print(f"  {R}[✗]  0/{p:<2d} {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    print(f"  {R}[X]  0/{p:<2d} {d}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return 0
 
 def partial(d, earned, total, r=""):
@@ -52,11 +52,11 @@ def partial(d, earned, total, r=""):
     if earned > 0:
         print(f"  {Y}[~] +{earned}/{total}  {d}{X}")
     else:
-        print(f"  {R}[✗]  0/{total:<2d} {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+        print(f"  {R}[X]  0/{total:<2d} {d}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return earned
 
-# ── Resource helpers ──
+# -- Resource helpers --
 def tag_val(resource, key):
     for t in resource.get('Tags', []):
         if t['Key'] == key:
@@ -74,7 +74,7 @@ def find_by_tag(resources, prefix, student):
 
 
 def main():
-    banner("BMIT3273 CLOUD COMPUTING — SET 4")
+    banner("BMIT3273 CLOUD COMPUTING - SET 4")
     print(f"  {W}Practical Test Auto Grader v1.0{X}")
     print(f"  {W}Topics: VPC | EC2 | Lambda | EBS{X}")
 
@@ -95,19 +95,19 @@ def main():
     vpc_id      = None
     instance_id = None
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 1 — CUSTOM VPC & NETWORKING  (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 1: Custom VPC & Networking (25 Marks)")
+    # ==========================================================
+    # QUESTION 1 - CUSTOM VPC & NETWORKING  (25 MARKS)
+    # ==========================================================
+    section("Question 1: Custom VPC & Networking")
     t1 = 0
     try:
-        # ── 1a. VPC (5) ──
+        # -- 1a. VPC (5) --
         vpcs = ec2.describe_vpcs()['Vpcs']
         vpc = find_by_tag(vpcs, 'vpc', name)
         if vpc:
             vpc_id = vpc['VpcId']
             t1 += ok(f"VPC found: {tag_val(vpc,'Name')} [{vpc_id}]", 5)
-            # ── 1b. CIDR (3) ──
+            # -- 1b. CIDR (3) --
             cidr = vpc.get('CidrBlock', '')
             if cidr == '10.0.0.0/16':
                 t1 += ok("VPC CIDR: 10.0.0.0/16", 3)
@@ -117,7 +117,7 @@ def main():
             t1 += fail("VPC found", 5, f"No VPC with Name containing 'vpc-{name}'")
             t1 += fail("VPC CIDR", 3)
 
-        # ── 1c. Subnet (4) ──
+        # -- 1c. Subnet (4) --
         subs = ec2.describe_subnets()['Subnets']
         sub  = find_by_tag(subs, 'subnet', name)
         if sub:
@@ -126,7 +126,7 @@ def main():
                 t1 += ok(f"Subnet in VPC: {tag_val(sub,'Name')}", 4)
             else:
                 t1 += partial("Subnet found but NOT in custom VPC", 2, 4)
-            # ── 1d. Subnet CIDR (2) ──
+            # -- 1d. Subnet CIDR (2) --
             sc = sub.get('CidrBlock', '')
             if sc == '10.0.1.0/24':
                 t1 += ok("Subnet CIDR: 10.0.1.0/24", 2)
@@ -136,7 +136,7 @@ def main():
             t1 += fail("Subnet found", 4, f"No subnet named 'subnet-{name}'")
             t1 += fail("Subnet CIDR", 2)
 
-        # ── 1e. Internet Gateway attached (5) ──
+        # -- 1e. Internet Gateway attached (5) --
         igws = ec2.describe_internet_gateways()['InternetGateways']
         igw  = find_by_tag(igws, 'igw', name)
         if igw:
@@ -151,7 +151,7 @@ def main():
         else:
             t1 += fail("IGW found", 5, f"No IGW named 'igw-{name}'")
 
-        # ── 1f. Route Table (3) + 1g. Public route (3) ──
+        # -- 1f. Route Table (3) + 1g. Public route (3) --
         rtbs = ec2.describe_route_tables()['RouteTables']
         rtb  = find_by_tag(rtbs, 'rtb', name)
         if rtb:
@@ -162,9 +162,9 @@ def main():
                 for r in rtb.get('Routes', [])
             )
             if has_pub:
-                t1 += ok("Route 0.0.0.0/0 → IGW", 3)
+                t1 += ok("Route 0.0.0.0/0 -> IGW", 3)
             else:
-                t1 += fail("Route 0.0.0.0/0 → IGW", 3, "No public route found")
+                t1 += fail("Route 0.0.0.0/0 -> IGW", 3, "No public route found")
         else:
             # Fallback: unnamed RTB in VPC with public route
             found_fb = False
@@ -182,21 +182,21 @@ def main():
                         break
             if not found_fb:
                 t1 += fail("Route Table found", 3, f"No RTB named 'rtb-{name}'")
-                t1 += fail("Route 0.0.0.0/0 → IGW", 3)
+                t1 += fail("Route 0.0.0.0/0 -> IGW", 3)
 
     except Exception as e:
-        print(f"  {R}Error Task 1: {e}{X}")
+        print(f"  {R}Error Question 1: {e}{X}")
 
-    task_scores['Task 1: VPC & Networking'] = t1
-    print(f"\n  {B}Task 1 Subtotal: {t1} / 25{X}")
+    task_scores['Question 1: VPC & Networking'] = t1
+    print(f"\n  {B}Question 1 Subtotal: {t1} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 2 — EC2 INSTANCE WITH WEB SERVER  (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 2: EC2 Instance with Web Server (25 Marks)")
+    # ==========================================================
+    # QUESTION 2 - EC2 INSTANCE WITH WEB SERVER  (25 MARKS)
+    # ==========================================================
+    section("Question 2: EC2 Instance with Web Server")
     t2 = 0
     try:
-        # ── 2a-c. Security Group (3+2+2 = 7) ──
+        # -- 2a-c. Security Group (3+2+2 = 7) --
         sgs = ec2.describe_security_groups()['SecurityGroups']
         sg  = None
         for s in sgs:
@@ -230,7 +230,7 @@ def main():
             t2 += fail("Port 22", 2)
             t2 += fail("Port 80", 2)
 
-        # ── 2d-i. EC2 Instance (3+2+3+2+3+5 = 18) ──
+        # -- 2d-i. EC2 Instance (3+2+3+2+3+5 = 18) --
         reservations = ec2.describe_instances(
             Filters=[{'Name': 'instance-state-name',
                        'Values': ['running', 'stopped', 'pending']}]
@@ -292,7 +292,7 @@ def main():
             elif state != 'running':
                 t2 += fail("Web page", 5, f"Instance state: {state}")
             else:
-                t2 += fail("Web page", 5, "No public IP — enable auto-assign or use Elastic IP")
+                t2 += fail("Web page", 5, "No public IP - enable auto-assign or use Elastic IP")
         else:
             t2 += fail("EC2 Instance found", 3, f"No instance named 'ec2-{name}'")
             for d, p in [("Instance Type", 2), ("In Custom VPC", 3),
@@ -300,15 +300,15 @@ def main():
                 t2 += fail(d, p)
 
     except Exception as e:
-        print(f"  {R}Error Task 2: {e}{X}")
+        print(f"  {R}Error Question 2: {e}{X}")
 
-    task_scores['Task 2: EC2 Web Server '] = t2
-    print(f"\n  {B}Task 2 Subtotal: {t2} / 25{X}")
+    task_scores['Question 2: EC2 Web Server '] = t2
+    print(f"\n  {B}Question 2 Subtotal: {t2} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 3 — LAMBDA FUNCTION  (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 3: Lambda Function (25 Marks)")
+    # ==========================================================
+    # QUESTION 3 - LAMBDA FUNCTION  (25 MARKS)
+    # ==========================================================
+    section("Question 3: Lambda Function")
     t3 = 0
     try:
         fname = f"lambda-{name}"
@@ -368,26 +368,26 @@ def main():
             t3 += fail("Lambda Function", 5, str(e)[:80])
 
     except Exception as e:
-        print(f"  {R}Error Task 3: {e}{X}")
+        print(f"  {R}Error Question 3: {e}{X}")
 
-    task_scores['Task 3: Lambda Function'] = t3
-    print(f"\n  {B}Task 3 Subtotal: {t3} / 25{X}")
+    task_scores['Question 3: Lambda Function'] = t3
+    print(f"\n  {B}Question 3 Subtotal: {t3} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 4 — EBS VOLUME & SNAPSHOT  (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 4: EBS Volume & Snapshot (25 Marks)")
+    # ==========================================================
+    # QUESTION 4 - EBS VOLUME & SNAPSHOT  (25 MARKS)
+    # ==========================================================
+    section("Question 4: EBS Volume & Snapshot")
     t4 = 0
     vol_id = None
     try:
-        # ── 4a. Volume (5) ──
+        # -- 4a. Volume (5) --
         vols = ec2.describe_volumes()['Volumes']
         vol  = find_by_tag(vols, 'ebs', name)
         if vol:
             vol_id = vol['VolumeId']
             t4 += ok(f"EBS Volume: {tag_val(vol,'Name')} [{vol_id}]", 5)
 
-            # ── 4b. Type gp3 (3) ──
+            # -- 4b. Type gp3 (3) --
             vt = vol.get('VolumeType', '')
             if vt == 'gp3':
                 t4 += ok("Volume Type: gp3", 3)
@@ -396,12 +396,12 @@ def main():
             else:
                 t4 += fail("Volume Type: gp3", 3, f"Found: {vt}")
 
-            # ── 4c. Size 10 GB (3) ──
+            # -- 4c. Size 10 GB (3) --
             vs = vol.get('Size', 0)
             t4 += ok("Volume Size: 10 GB", 3) if vs == 10 \
                 else fail("Volume Size: 10 GB", 3, f"Found: {vs} GB")
 
-            # ── 4d. Attached (4) ──
+            # -- 4d. Attached (4) --
             att = vol.get('Attachments', [])
             if att and att[0].get('State') in ('attached', 'attaching'):
                 ai = att[0].get('InstanceId', '')
@@ -414,7 +414,7 @@ def main():
             else:
                 t4 += fail("Volume attached to EC2", 4, "Not attached")
 
-            # ── 4e. Tag Project=BMIT3273 (3) ──
+            # -- 4e. Tag Project=BMIT3273 (3) --
             proj = tag_val(vol, 'Project')
             if proj.upper() == 'BMIT3273':
                 t4 += ok("Volume Tag: Project = BMIT3273", 3)
@@ -429,7 +429,7 @@ def main():
                          ("Attached", 4), ("Volume Tag", 3)]:
                 t4 += fail(d, p)
 
-        # ── 4f. Snapshot (4) ──
+        # -- 4f. Snapshot (4) --
         snaps = ec2.describe_snapshots(OwnerIds=['self'])['Snapshots']
         snap  = find_by_tag(snaps, 'snap', name)
 
@@ -442,7 +442,7 @@ def main():
 
         if snap:
             t4 += ok(f"Snapshot: {tag_val(snap,'Name') or snap['SnapshotId']}", 4)
-            # ── 4g. Snapshot tag (3) ──
+            # -- 4g. Snapshot tag (3) --
             sp = tag_val(snap, 'Project')
             if sp.upper() == 'BMIT3273':
                 t4 += ok("Snapshot Tag: Project = BMIT3273", 3)
@@ -457,30 +457,30 @@ def main():
             t4 += fail("Snapshot Tag", 3)
 
     except Exception as e:
-        print(f"  {R}Error Task 4: {e}{X}")
+        print(f"  {R}Error Question 4: {e}{X}")
 
-    task_scores['Task 4: EBS & Snapshot '] = t4
-    print(f"\n  {B}Task 4 Subtotal: {t4} / 25{X}")
+    task_scores['Question 4: EBS & Snapshot '] = t4
+    print(f"\n  {B}Question 4 Subtotal: {t4} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
+    # ==========================================================
     #  FINAL RESULT
-    # ══════════════════════════════════════════════════════════
+    # ==========================================================
     banner("FINAL RESULT")
     for task, score in task_scores.items():
         filled = int(score * 10 / 25)
         empty  = 10 - filled
-        bar    = '█' * filled + '░' * empty
+        bar    = '#' * filled + '-' * empty
         print(f"  {task:32s} {bar} {score:2d}/25")
 
-    print(f"\n  {'─'*44}")
+    print(f"\n  {'-'*44}")
     if   SCORE >= 80: color = G
     elif SCORE >= 50: color = Y
     else:             color = R
     print(f"  {color}{B}  TOTAL SCORE :  {SCORE} / 100{X}")
-    print(f"  {'─'*44}")
+    print(f"  {'-'*44}")
 
     if SCORE == 100:
-        print(f"\n  {G}{B}  ★  PERFECT SCORE — Excellent work!  ★{X}")
+        print(f"\n  {G}{B}  *  PERFECT SCORE - Excellent work!  *{X}")
     elif SCORE >= 80:
         print(f"\n  {G}  Great job! Review any missed items above.{X}")
     elif SCORE >= 50:
@@ -493,3 +493,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

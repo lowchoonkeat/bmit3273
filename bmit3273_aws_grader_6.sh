@@ -9,10 +9,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# ═══════════════════════════════════════════════════════════════
-#  BMIT3273 CLOUD COMPUTING — PRACTICAL TEST SET 6 AUTO GRADER
+# ===============================================================
+#  BMIT3273 CLOUD COMPUTING - PRACTICAL TEST SET 6 AUTO GRADER
 #  Topics: VPC & Networking | RDS Database | S3 Versioning | Lambda
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 ssl_ctx = ssl._create_unverified_context()
 SCORE = 0
@@ -21,25 +21,25 @@ G  = '\033[92m';  R  = '\033[91m';  Y  = '\033[93m'
 C  = '\033[96m';  B  = '\033[1m';   W  = '\033[97m';  X  = '\033[0m'
 
 def banner(t):
-    print(f"\n{C}{B}{'═'*60}\n  {t}\n{'═'*60}{X}")
+    print(f"\n{C}{B}{'='*60}\n  {t}\n{'='*60}{X}")
 
 def section(t):
-    print(f"\n{C}{'─'*60}\n  {t}\n{'─'*60}{X}")
+    print(f"\n{C}{'-'*60}\n  {t}\n{'-'*60}{X}")
 
 def ok(d, p):
     global SCORE; SCORE += p
-    print(f"  {G}[✓] +{p:2d}  {d}{X}"); return p
+    print(f"  {G}[OK] +{p:2d}  {d}{X}"); return p
 
 def fail(d, p, r=""):
-    print(f"  {R}[✗]  0/{p:<2d} {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    print(f"  {R}[X]  0/{p:<2d} {d}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return 0
 
 def partial(d, earned, total, r=""):
     global SCORE; SCORE += earned
     sym = Y if earned > 0 else R
     print(f"  {sym}[~] +{earned}/{total}  {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return earned
 
 def tag_val(resource, key):
@@ -56,7 +56,7 @@ def find_by_tag(resources, prefix, student):
 
 
 def main():
-    banner("BMIT3273 CLOUD COMPUTING — SET 6")
+    banner("BMIT3273 CLOUD COMPUTING - SET 6")
     print(f"  {W}Practical Test Auto Grader v1.0{X}")
     print(f"  {W}Topics: VPC | RDS | S3 Versioning | Lambda{X}")
 
@@ -77,10 +77,10 @@ def main():
 
     task_scores = {}
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 1 — VPC & NETWORKING (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 1: Custom VPC & Networking (25 Marks)")
+    # ==========================================================
+    # QUESTION 1 - VPC & NETWORKING (25 MARKS)
+    # ==========================================================
+    section("Question 1: Custom VPC & Networking")
     t1 = 0
     vpc_id = None
     try:
@@ -148,8 +148,8 @@ def main():
                 and r.get('GatewayId', '').startswith('igw-')
                 for r in rtb.get('Routes', [])
             )
-            t1 += ok("Route Table with 0.0.0.0/0 → IGW", 4) if has_pub \
-                else fail("Route 0.0.0.0/0 → IGW", 4, "No public route")
+            t1 += ok("Route Table with 0.0.0.0/0 -> IGW", 4) if has_pub \
+                else fail("Route 0.0.0.0/0 -> IGW", 4, "No public route")
         else:
             found = False
             if vpc_id:
@@ -164,15 +164,15 @@ def main():
                 t1 += fail("Route Table found", 4, f"No RTB named 'rtb-{name}'")
 
     except Exception as e:
-        print(f"  {R}Error Task 1: {e}{X}")
+        print(f"  {R}Error Question 1: {e}{X}")
 
-    task_scores['Task 1: VPC & Network'] = t1
-    print(f"\n  {B}Task 1 Subtotal: {t1} / 25{X}")
+    task_scores['Question 1: VPC & Network'] = t1
+    print(f"\n  {B}Question 1 Subtotal: {t1} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 2 — RDS DATABASE (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 2: RDS Database Instance (25 Marks)")
+    # ==========================================================
+    # QUESTION 2 - RDS DATABASE (25 MARKS)
+    # ==========================================================
+    section("Question 2: RDS Database Instance")
     t2 = 0
     try:
         dbs = rds.describe_db_instances()['DBInstances']
@@ -223,15 +223,15 @@ def main():
                          ("Initial DB", 4), ("SG 3306", 5), ("Not public", 5)]:
                 t2 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 2: {e}{X}")
+        print(f"  {R}Error Question 2: {e}{X}")
 
-    task_scores['Task 2: RDS Database '] = t2
-    print(f"\n  {B}Task 2 Subtotal: {t2} / 25{X}")
+    task_scores['Question 2: RDS Database '] = t2
+    print(f"\n  {B}Question 2 Subtotal: {t2} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 3 — S3 VERSIONING & LIFECYCLE (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 3: S3 Versioning & Lifecycle (25 Marks)")
+    # ==========================================================
+    # QUESTION 3 - S3 VERSIONING & LIFECYCLE (25 MARKS)
+    # ==========================================================
+    section("Question 3: S3 Versioning & Lifecycle")
     t3 = 0
     try:
         buckets = s3.list_buckets()['Buckets']
@@ -280,15 +280,15 @@ def main():
             for d, p in [("Tag", 4), ("Versioning", 5), ("Lifecycle", 9), ("config.txt", 5)]:
                 t3 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 3: {e}{X}")
+        print(f"  {R}Error Question 3: {e}{X}")
 
-    task_scores['Task 3: S3 Lifecycle '] = t3
-    print(f"\n  {B}Task 3 Subtotal: {t3} / 25{X}")
+    task_scores['Question 3: S3 Lifecycle '] = t3
+    print(f"\n  {B}Question 3 Subtotal: {t3} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 4 — LAMBDA FUNCTION (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 4: Lambda Function (25 Marks)")
+    # ==========================================================
+    # QUESTION 4 - LAMBDA FUNCTION (25 MARKS)
+    # ==========================================================
+    section("Question 4: Lambda Function")
     t4 = 0
     try:
         fname = f"lambda-{name}"
@@ -337,21 +337,21 @@ def main():
                          ("Invoke", 3), ("Response name", 3), ("Response ID", 2)]:
                 t4 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 4: {e}{X}")
+        print(f"  {R}Error Question 4: {e}{X}")
 
-    task_scores['Task 4: Lambda       '] = t4
-    print(f"\n  {B}Task 4 Subtotal: {t4} / 25{X}")
+    task_scores['Question 4: Lambda       '] = t4
+    print(f"\n  {B}Question 4 Subtotal: {t4} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
+    # ==========================================================
     banner("FINAL RESULT")
     for task, score in task_scores.items():
-        filled = int(score * 10 / 25); bar = '█' * filled + '░' * (10 - filled)
+        filled = int(score * 10 / 25); bar = '#' * filled + '-' * (10 - filled)
         print(f"  {task} {bar} {score:2d}/25")
-    print(f"\n  {'─'*44}")
+    print(f"\n  {'-'*44}")
     color = G if SCORE >= 80 else (Y if SCORE >= 50 else R)
     print(f"  {color}{B}  TOTAL SCORE :  {SCORE} / 100{X}")
-    print(f"  {'─'*44}")
-    if SCORE == 100: print(f"\n  {G}{B}  ★  PERFECT SCORE — Excellent work!  ★{X}")
+    print(f"  {'-'*44}")
+    if SCORE == 100: print(f"\n  {G}{B}  *  PERFECT SCORE - Excellent work!  *{X}")
     elif SCORE >= 80: print(f"\n  {G}  Great job! Review any missed items above.{X}")
     elif SCORE >= 50: print(f"\n  {Y}  Decent progress. Check failed items and retry.{X}")
     else: print(f"\n  {R}  Needs improvement. Re-read instructions carefully.{X}")
@@ -360,3 +360,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

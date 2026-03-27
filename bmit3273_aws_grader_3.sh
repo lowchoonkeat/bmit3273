@@ -20,7 +20,7 @@ def grade_step(desc, points, condition, issue=""):
     global SCORED_MARKS
     if condition:
         SCORED_MARKS += points
-        print(f"[\u2713] PASS (+{points}): {desc}")
+        print(f"[OK] PASS (+{points}): {desc}")
     else:
         print(f"[X] FAIL (0/{points}): {desc}")
         if issue: print(f"    -> Issue: {issue}")
@@ -62,8 +62,8 @@ def main():
     asg = boto3.client('autoscaling')
     elbv2 = boto3.client('elbv2')
 
-    # TASK 1: DYNAMODB
-    print_header("Task 1: DynamoDB (25 Marks)")
+    # QUESTION 1: DYNAMODB
+    print_header("Question 1: DynamoDB")
     try:
         tbls = ddb.list_tables()['TableNames']
         target_t = next((t for t in tbls if f"ddb-{student_name_clean}" in t), None)
@@ -79,10 +79,10 @@ def main():
             grade_step("Table Found", 10, False)
             grade_step("Partition Key", 5, False)
             grade_step("Item Added", 10, False)
-    except Exception as e: print(f"Error Task 1: {e}")
+    except Exception as e: print(f"Error Question 1: {e}")
 
-    # TASK 2: S3 SECURITY
-    print_header("Task 2: S3 Security (25 Marks)")
+    # QUESTION 2: S3 SECURITY
+    print_header("Question 2: S3 Security")
     try:
         buckets = s3.list_buckets()['Buckets']
         target_b = next((b['Name'] for b in buckets if f"s3-{student_name_clean}" in b['Name']), None)
@@ -113,10 +113,10 @@ def main():
             grade_step("Versioning", 4, False)
             grade_step("Lifecycle", 10, False)
             grade_step("File Uploaded", 5, False)
-    except Exception as e: print(f"Error Task 2: {e}")
+    except Exception as e: print(f"Error Question 2: {e}")
 
-    # TASK 3: EC2 WEB TIER
-    print_header("Task 3: Web Tier Config (25 Marks)")
+    # QUESTION 3: EC2 WEB TIER
+    print_header("Question 3: Web Tier Config")
     try:
         lts = ec2.describe_launch_templates()['LaunchTemplates']
         target_lt = next((lt for lt in lts if f"lt-{student_name_clean}" in lt['LaunchTemplateName']), None)
@@ -146,7 +146,7 @@ def main():
             
             global SCORED_MARKS
             SCORED_MARKS += sg_points
-            print(f"[{'✓' if sg_points>0 else 'X'}] PASS/PARTIAL (+{sg_points}/5): Security Group - {sg_msg}")
+            print(f"[{'OK' if sg_points>0 else 'X'}] PASS/PARTIAL (+{sg_points}/5): Security Group - {sg_msg}")
 
             ud_encoded = data.get('UserData', '')
             if ud_encoded:
@@ -170,10 +170,10 @@ def main():
             grade_step("LabInstanceProfile Attached", 3, False)
             print("[X] FAIL (0/5): Security Group Not Found")
             grade_step("Script: Logic Checks", 15, False)
-    except Exception as e: print(f"Error Task 3: {e}")
+    except Exception as e: print(f"Error Question 3: {e}")
 
-    # TASK 4: HIGH AVAILABILITY
-    print_header("Task 4: High Availability (25 Marks)")
+    # QUESTION 4: HIGH AVAILABILITY
+    print_header("Question 4: High Availability")
     alb_dns = None
     try:
         albs = elbv2.describe_load_balancers()['LoadBalancers']
@@ -213,7 +213,7 @@ def main():
             grade_step("Scaling Policy (CPU 60%)", 5, False)
             grade_step("Functional: Web Page Loads (Name)", 5, False)
             grade_step("Functional: S3 Data Visible (ID)", 10, False)
-    except Exception as e: print(f"Error Task 4: {e}")
+    except Exception as e: print(f"Error Question 4: {e}")
 
     print_header("FINAL RESULT")
     print(f"TOTAL: {SCORED_MARKS} / 100")
@@ -221,3 +221,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

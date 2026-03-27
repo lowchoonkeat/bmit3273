@@ -9,10 +9,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# ═══════════════════════════════════════════════════════════════
-#  BMIT3273 CLOUD COMPUTING — PRACTICAL TEST SET 5 AUTO GRADER
+# ===============================================================
+#  BMIT3273 CLOUD COMPUTING - PRACTICAL TEST SET 5 AUTO GRADER
 #  Topics: S3 Static Website | EC2 + Launch Template | DynamoDB | EFS
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 ssl_ctx = ssl._create_unverified_context()
 SCORE = 0
@@ -21,25 +21,25 @@ G  = '\033[92m';  R  = '\033[91m';  Y  = '\033[93m'
 C  = '\033[96m';  B  = '\033[1m';   W  = '\033[97m';  X  = '\033[0m'
 
 def banner(t):
-    print(f"\n{C}{B}{'═'*60}\n  {t}\n{'═'*60}{X}")
+    print(f"\n{C}{B}{'='*60}\n  {t}\n{'='*60}{X}")
 
 def section(t):
-    print(f"\n{C}{'─'*60}\n  {t}\n{'─'*60}{X}")
+    print(f"\n{C}{'-'*60}\n  {t}\n{'-'*60}{X}")
 
 def ok(d, p):
     global SCORE; SCORE += p
-    print(f"  {G}[✓] +{p:2d}  {d}{X}"); return p
+    print(f"  {G}[OK] +{p:2d}  {d}{X}"); return p
 
 def fail(d, p, r=""):
-    print(f"  {R}[✗]  0/{p:<2d} {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    print(f"  {R}[X]  0/{p:<2d} {d}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return 0
 
 def partial(d, earned, total, r=""):
     global SCORE; SCORE += earned
     sym = Y if earned > 0 else R
     print(f"  {sym}[~] +{earned}/{total}  {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return earned
 
 def tag_val(resource, key):
@@ -50,7 +50,7 @@ def tag_val(resource, key):
 
 
 def main():
-    banner("BMIT3273 CLOUD COMPUTING — SET 5")
+    banner("BMIT3273 CLOUD COMPUTING - SET 5")
     print(f"  {W}Practical Test Auto Grader v1.0{X}")
     print(f"  {W}Topics: S3 | EC2 + LT | DynamoDB | EFS{X}")
 
@@ -71,10 +71,10 @@ def main():
 
     task_scores = {}
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 1 — S3 STATIC WEBSITE HOSTING (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 1: S3 Static Website Hosting (25 Marks)")
+    # ==========================================================
+    # QUESTION 1 - S3 STATIC WEBSITE HOSTING (25 MARKS)
+    # ==========================================================
+    section("Question 1: S3 Static Website Hosting")
     t1 = 0
     target_bucket = None
     try:
@@ -126,15 +126,15 @@ def main():
                          ("Bucket policy", 5), ("Website accessible", 7)]:
                 t1 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 1: {e}{X}")
+        print(f"  {R}Error Question 1: {e}{X}")
 
-    task_scores['Task 1: S3 Website    '] = t1
-    print(f"\n  {B}Task 1 Subtotal: {t1} / 25{X}")
+    task_scores['Question 1: S3 Website    '] = t1
+    print(f"\n  {B}Question 1 Subtotal: {t1} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 2 — EC2 WITH LAUNCH TEMPLATE (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 2: EC2 with Launch Template (25 Marks)")
+    # ==========================================================
+    # QUESTION 2 - EC2 WITH LAUNCH TEMPLATE (25 MARKS)
+    # ==========================================================
+    section("Question 2: EC2 with Launch Template")
     t2 = 0
     try:
         import base64
@@ -219,15 +219,15 @@ def main():
             t2 += fail("Web page", 5)
 
     except Exception as e:
-        print(f"  {R}Error Task 2: {e}{X}")
+        print(f"  {R}Error Question 2: {e}{X}")
 
-    task_scores['Task 2: EC2 + LT      '] = t2
-    print(f"\n  {B}Task 2 Subtotal: {t2} / 25{X}")
+    task_scores['Question 2: EC2 + LT      '] = t2
+    print(f"\n  {B}Question 2 Subtotal: {t2} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 3 — DYNAMODB TABLE (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 3: DynamoDB Table (25 Marks)")
+    # ==========================================================
+    # QUESTION 3 - DYNAMODB TABLE (25 MARKS)
+    # ==========================================================
+    section("Question 3: DynamoDB Table")
     t3 = 0
     try:
         tbls = ddb.list_tables()['TableNames']
@@ -286,15 +286,15 @@ def main():
             for d, p in [("Partition key", 5), ("Sort key", 5), ("Item", 5), ("Status", 5)]:
                 t3 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 3: {e}{X}")
+        print(f"  {R}Error Question 3: {e}{X}")
 
-    task_scores['Task 3: DynamoDB      '] = t3
-    print(f"\n  {B}Task 3 Subtotal: {t3} / 25{X}")
+    task_scores['Question 3: DynamoDB      '] = t3
+    print(f"\n  {B}Question 3 Subtotal: {t3} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 4 — EFS FILE SYSTEM (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 4: EFS File System (25 Marks)")
+    # ==========================================================
+    # QUESTION 4 - EFS FILE SYSTEM (25 MARKS)
+    # ==========================================================
+    section("Question 4: EFS File System")
     t4 = 0
     try:
         fss = efs.describe_file_systems()['FileSystems']
@@ -335,27 +335,27 @@ def main():
             for d, p in [("Performance mode", 3), ("Tag Project", 5), ("Mount target", 10)]:
                 t4 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 4: {e}{X}")
+        print(f"  {R}Error Question 4: {e}{X}")
 
-    task_scores['Task 4: EFS           '] = t4
-    print(f"\n  {B}Task 4 Subtotal: {t4} / 25{X}")
+    task_scores['Question 4: EFS           '] = t4
+    print(f"\n  {B}Question 4 Subtotal: {t4} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
+    # ==========================================================
     #  FINAL RESULT
-    # ══════════════════════════════════════════════════════════
+    # ==========================================================
     banner("FINAL RESULT")
     for task, score in task_scores.items():
         filled = int(score * 10 / 25)
-        bar = '█' * filled + '░' * (10 - filled)
+        bar = '#' * filled + '-' * (10 - filled)
         print(f"  {task} {bar} {score:2d}/25")
 
-    print(f"\n  {'─'*44}")
+    print(f"\n  {'-'*44}")
     color = G if SCORE >= 80 else (Y if SCORE >= 50 else R)
     print(f"  {color}{B}  TOTAL SCORE :  {SCORE} / 100{X}")
-    print(f"  {'─'*44}")
+    print(f"  {'-'*44}")
 
     if SCORE == 100:
-        print(f"\n  {G}{B}  ★  PERFECT SCORE — Excellent work!  ★{X}")
+        print(f"\n  {G}{B}  *  PERFECT SCORE - Excellent work!  *{X}")
     elif SCORE >= 80:
         print(f"\n  {G}  Great job! Review any missed items above.{X}")
     elif SCORE >= 50:
@@ -368,3 +368,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

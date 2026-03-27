@@ -10,10 +10,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# ═══════════════════════════════════════════════════════════════
-#  BMIT3273 CLOUD COMPUTING — PRACTICAL TEST SET 10 AUTO GRADER
+# ===============================================================
+#  BMIT3273 CLOUD COMPUTING - PRACTICAL TEST SET 10 AUTO GRADER
 #  Topics: EC2 & Security | DynamoDB | EBS | ALB + Auto Scaling
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 ssl_ctx = ssl._create_unverified_context()
 SCORE = 0
@@ -21,23 +21,23 @@ SCORE = 0
 G  = '\033[92m';  R  = '\033[91m';  Y  = '\033[93m'
 C  = '\033[96m';  B  = '\033[1m';   W  = '\033[97m';  X  = '\033[0m'
 
-def banner(t): print(f"\n{C}{B}{'═'*60}\n  {t}\n{'═'*60}{X}")
-def section(t): print(f"\n{C}{'─'*60}\n  {t}\n{'─'*60}{X}")
+def banner(t): print(f"\n{C}{B}{'='*60}\n  {t}\n{'='*60}{X}")
+def section(t): print(f"\n{C}{'-'*60}\n  {t}\n{'-'*60}{X}")
 
 def ok(d, p):
     global SCORE; SCORE += p
-    print(f"  {G}[✓] +{p:2d}  {d}{X}"); return p
+    print(f"  {G}[OK] +{p:2d}  {d}{X}"); return p
 
 def fail(d, p, r=""):
-    print(f"  {R}[✗]  0/{p:<2d} {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    print(f"  {R}[X]  0/{p:<2d} {d}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return 0
 
 def partial(d, earned, total, r=""):
     global SCORE; SCORE += earned
     sym = Y if earned > 0 else R
     print(f"  {sym}[~] +{earned}/{total}  {d}{X}")
-    if r: print(f"       {Y}→ {r}{X}")
+    if r: print(f"       {Y}-> {r}{X}")
     return earned
 
 def tag_val(tags, key):
@@ -52,7 +52,7 @@ def find_sg(ec2, name):
 
 
 def main():
-    banner("BMIT3273 CLOUD COMPUTING — SET 10")
+    banner("BMIT3273 CLOUD COMPUTING - SET 10")
     print(f"  {W}Topics: EC2 & Security | DynamoDB | EBS | ALB + ASG{X}")
 
     session = boto3.session.Session()
@@ -70,10 +70,10 @@ def main():
     elbv2 = boto3.client('elbv2')
     task_scores = {}
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 1 — EC2 INSTANCE & SECURITY (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 1: EC2 Instance & Security (25 Marks)")
+    # ==========================================================
+    # QUESTION 1 - EC2 INSTANCE & SECURITY (25 MARKS)
+    # ==========================================================
+    section("Question 1: EC2 Instance & Security")
     t1 = 0
     try:
         # Security group
@@ -146,15 +146,15 @@ def main():
             t1 += fail("EC2", 3, f"No running 'ec2-{name}'")
             for d, p in [("Type", 2), ("Profile", 3), ("Web page", 8)]: t1 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 1: {e}{X}")
+        print(f"  {R}Error Question 1: {e}{X}")
 
-    task_scores['Task 1: EC2 Security '] = t1
-    print(f"\n  {B}Task 1 Subtotal: {t1} / 25{X}")
+    task_scores['Question 1: EC2 Security '] = t1
+    print(f"\n  {B}Question 1 Subtotal: {t1} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 2 — DYNAMODB TABLE (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 2: DynamoDB Table (25 Marks)")
+    # ==========================================================
+    # QUESTION 2 - DYNAMODB TABLE (25 MARKS)
+    # ==========================================================
+    section("Question 2: DynamoDB Table")
     t2 = 0
     try:
         tables = ddb.list_tables()['TableNames']
@@ -212,15 +212,15 @@ def main():
             t2 += fail("Table", 5, f"No 'ddb-{name}'")
             for d, p in [("PK", 5), ("SK", 5), ("Item", 5), ("Status", 5)]: t2 += fail(d, p)
     except Exception as e:
-        print(f"  {R}Error Task 2: {e}{X}")
+        print(f"  {R}Error Question 2: {e}{X}")
 
-    task_scores['Task 2: DynamoDB     '] = t2
-    print(f"\n  {B}Task 2 Subtotal: {t2} / 25{X}")
+    task_scores['Question 2: DynamoDB     '] = t2
+    print(f"\n  {B}Question 2 Subtotal: {t2} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 3 — EBS VOLUME & SNAPSHOT (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 3: EBS Volume & Snapshot (25 Marks)")
+    # ==========================================================
+    # QUESTION 3 - EBS VOLUME & SNAPSHOT (25 MARKS)
+    # ==========================================================
+    section("Question 3: EBS Volume & Snapshot")
     t3 = 0
     try:
         vols = ec2.describe_volumes()['Volumes']
@@ -274,15 +274,15 @@ def main():
             t3 += fail("Snapshot", 4, f"No 'snap-{name}'")
             t3 += fail("Snap Tag", 3)
     except Exception as e:
-        print(f"  {R}Error Task 3: {e}{X}")
+        print(f"  {R}Error Question 3: {e}{X}")
 
-    task_scores['Task 3: EBS          '] = t3
-    print(f"\n  {B}Task 3 Subtotal: {t3} / 25{X}")
+    task_scores['Question 3: EBS          '] = t3
+    print(f"\n  {B}Question 3 Subtotal: {t3} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
-    #  TASK 4 — ALB + AUTO SCALING (25 MARKS)
-    # ══════════════════════════════════════════════════════════
-    section("Task 4: ALB + Auto Scaling (25 Marks)")
+    # ==========================================================
+    # QUESTION 4 - ALB + AUTO SCALING (25 MARKS)
+    # ==========================================================
+    section("Question 4: ALB + Auto Scaling")
     t4 = 0
     try:
         # ALB
@@ -360,21 +360,21 @@ def main():
         else:
             t4 += fail("ALB DNS", 5, "No ALB")
     except Exception as e:
-        print(f"  {R}Error Task 4: {e}{X}")
+        print(f"  {R}Error Question 4: {e}{X}")
 
-    task_scores['Task 4: ALB + ASG    '] = t4
-    print(f"\n  {B}Task 4 Subtotal: {t4} / 25{X}")
+    task_scores['Question 4: ALB + ASG    '] = t4
+    print(f"\n  {B}Question 4 Subtotal: {t4} / 25{X}")
 
-    # ══════════════════════════════════════════════════════════
+    # ==========================================================
     banner("FINAL RESULT")
     for task, score in task_scores.items():
-        filled = int(score * 10 / 25); bar = '█' * filled + '░' * (10 - filled)
+        filled = int(score * 10 / 25); bar = '#' * filled + '-' * (10 - filled)
         print(f"  {task} {bar} {score:2d}/25")
-    print(f"\n  {'─'*44}")
+    print(f"\n  {'-'*44}")
     color = G if SCORE >= 80 else (Y if SCORE >= 50 else R)
     print(f"  {color}{B}  TOTAL SCORE :  {SCORE} / 100{X}")
-    print(f"  {'─'*44}")
-    if SCORE == 100: print(f"\n  {G}{B}  ★  PERFECT SCORE — Excellent work!  ★{X}")
+    print(f"  {'-'*44}")
+    if SCORE == 100: print(f"\n  {G}{B}  *  PERFECT SCORE - Excellent work!  *{X}")
     elif SCORE >= 80: print(f"\n  {G}  Great job!{X}")
     elif SCORE >= 50: print(f"\n  {Y}  Decent progress.{X}")
     else: print(f"\n  {R}  Needs improvement.{X}")
@@ -383,3 +383,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
