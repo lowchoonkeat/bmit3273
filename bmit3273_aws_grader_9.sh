@@ -3,6 +3,12 @@ import json
 import base64
 import urllib.request
 import ssl
+import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 # ═══════════════════════════════════════════════════════════════
 #  BMIT3273 CLOUD COMPUTING — PRACTICAL TEST SET 9 AUTO GRADER
@@ -297,6 +303,7 @@ def main():
     elif SCORE >= 50: print(f"\n  {Y}  Decent progress.{X}")
     else: print(f"\n  {R}  Needs improvement.{X}")
     print()
+    print("  Mr Low blessing you!")
 
 if __name__ == "__main__":
     main()

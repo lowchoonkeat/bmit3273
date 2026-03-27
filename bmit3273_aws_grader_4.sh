@@ -2,6 +2,12 @@ import boto3
 import json
 import urllib.request
 import ssl
+import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 # ═══════════════════════════════════════════════════════════════
 #  BMIT3273 CLOUD COMPUTING — PRACTICAL TEST SET 4 AUTO GRADER
@@ -135,7 +141,7 @@ def main():
         igw  = find_by_tag(igws, 'igw', name)
         if igw:
             attached = [a['VpcId'] for a in igw.get('Attachments', [])
-                        if a.get('State') == 'attached']
+                        if a.get('VpcId') and a.get('State') in ('attached', 'available')]
             if vpc_id and vpc_id in attached:
                 t1 += ok(f"IGW attached to VPC: {tag_val(igw,'Name')}", 5)
             elif attached:
@@ -482,6 +488,7 @@ def main():
     else:
         print(f"\n  {R}  Needs improvement. Re-read instructions carefully.{X}")
     print()
+    print("  Mr Low blessing you!")
 
 
 if __name__ == "__main__":

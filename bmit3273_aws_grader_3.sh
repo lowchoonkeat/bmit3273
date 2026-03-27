@@ -2,6 +2,12 @@ import boto3
 import urllib.request
 import ssl
 import base64
+import sys
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 # --- CONFIGURATION ---
 ssl_context = ssl._create_unverified_context()
@@ -211,6 +217,7 @@ def main():
 
     print_header("FINAL RESULT")
     print(f"TOTAL: {SCORED_MARKS} / 100")
+    print("Mr Low blessing you!")
 
 if __name__ == "__main__":
     main()
