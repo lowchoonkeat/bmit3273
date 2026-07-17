@@ -4,9 +4,9 @@
 Run inside AWS Academy Learner Lab CloudShell:
     python3 bmit3273_aws_grader_2_revised.py
 
-The grader performs read-only AWS API checks except for an optional AWS Systems
-Manager Run Command used to verify the EFS mount and student.txt on the EC2
-instance. That command only reads mount and file information.
+The grader performs read-only AWS API checks except for optional AWS Systems
+Manager Run Commands used to verify the active web service, EFS mount, and
+student.txt on the EC2 instance. Those commands only inspect system state.
 """
 
 import base64
@@ -109,32 +109,24 @@ def find_efs_named(file_systems, expected):
     )
 
 
-def verify_efs_inside_instance(ssm, instance_id, raw_name, student_id):
-    """Return (success, reason). Uses a read-only SSM shell command."""
+def run_ssm_check(ssm, instance_id, command, comment):
+    """Return (success, reason) for a read-only SSM shell command."""
     try:
         info = ssm.describe_instance_information(
             Filters=[{"Key": "InstanceIds", "Values": [instance_id]}]
         ).get("InstanceInformationList", [])
         if not info or info[0].get("PingStatus") != "Online":
-            return None, "EC2 is not online in Systems Manager; verify /mnt/efs manually"
+            return False, "EC2 is not online in Systems Manager"
 
-        name_q = shlex.quote(raw_name.strip())
-        sid_q = shlex.quote(student_id.strip())
-        command = (
-            "mountpoint -q /mnt/efs && "
-            "test -f /mnt/efs/student.txt && "
-            f"grep -Fqi -- {name_q} /mnt/efs/student.txt && "
-            f"grep -Fqi -- {sid_q} /mnt/efs/student.txt"
-        )
         response = ssm.send_command(
             InstanceIds=[instance_id],
             DocumentName="AWS-RunShellScript",
             Parameters={"commands": [command]},
             TimeoutSeconds=30,
-            Comment="BMIT3273 read-only EFS verification",
+            Comment=comment,
         )
         command_id = response["Command"]["CommandId"]
-        for _ in range(15):
+        for _ in range(30):
             time.sleep(1)
             try:
                 invocation = ssm.get_command_invocation(
@@ -147,10 +139,35 @@ def verify_efs_inside_instance(ssm, instance_id, raw_name, student_id):
                 return True, ""
             if status in {"Cancelled", "Failed", "TimedOut", "Cancelling"}:
                 detail = invocation.get("StandardErrorContent", "").strip()
-                return False, detail or "Mount, file, name or student ID verification failed"
+                return False, detail or "SSM verification command failed"
         return False, "SSM verification timed out"
     except (ClientError, BotoCoreError) as exc:
         return None, f"SSM check unavailable: {exc}"
+
+
+def verify_web_server_inside_instance(ssm, instance_id):
+    return run_ssm_check(
+        ssm,
+        instance_id,
+        "systemctl is-active --quiet httpd || "
+        "systemctl is-active --quiet nginx || "
+        "systemctl is-active --quiet apache2",
+        "BMIT3273 web server verification",
+    )
+
+
+def verify_efs_inside_instance(ssm, instance_id, raw_name, student_id):
+    name_q = shlex.quote(raw_name.strip())
+    sid_q = shlex.quote(student_id.strip())
+    command = (
+        "mountpoint -q /mnt/efs && "
+        "test -f /mnt/efs/student.txt && "
+        f"grep -Fqi -- {name_q} /mnt/efs/student.txt && "
+        f"grep -Fqi -- {sid_q} /mnt/efs/student.txt"
+    )
+    return run_ssm_check(
+        ssm, instance_id, command, "BMIT3273 read-only EFS verification"
+    )
 
 
 def main():
@@ -289,7 +306,19 @@ def main():
                 user_data_ok = any(token in decoded for token in ("httpd", "apache", "nginx"))
                 q2 += award("User Data installs a web server", 2) if user_data_ok else fail("User Data installs a web server", 2)
             except (ClientError, ValueError) as exc:
-                q2 += fail("User Data installs a web server", 2, str(exc))
+                verified, reason = verify_web_server_inside_instance(
+                    ssm, target_instance["InstanceId"]
+                )
+                if verified:
+                    q2 += award(
+                        "Web server active (User Data inspection unavailable)", 2
+                    )
+                else:
+                    q2 += fail(
+                        "User Data installs a web server",
+                        2,
+                        f"{exc}; fallback verification failed: {reason}",
+                    )
 
             public_ip = target_instance.get("PublicIpAddress")
             if public_ip:
