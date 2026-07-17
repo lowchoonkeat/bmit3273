@@ -157,12 +157,14 @@ def verify_web_server_inside_instance(ssm, instance_id):
 
 
 def verify_efs_inside_instance(ssm, instance_id, raw_name, student_id):
-    name_q = shlex.quote(raw_name.strip())
+    normalized_name = "".join(raw_name.casefold().split())
+    name_q = shlex.quote(normalized_name)
     sid_q = shlex.quote(student_id.strip())
     command = (
         "mountpoint -q /mnt/efs && "
         "test -f /mnt/efs/student.txt && "
-        f"grep -Fqi -- {name_q} /mnt/efs/student.txt && "
+        "tr -d '[:space:]' < /mnt/efs/student.txt | "
+        f"tr '[:upper:]' '[:lower:]' | grep -Fq -- {name_q} && "
         f"grep -Fqi -- {sid_q} /mnt/efs/student.txt"
     )
     return run_ssm_check(
@@ -304,7 +306,22 @@ def main():
                 data = ec2.describe_instance_attribute(InstanceId=target_instance["InstanceId"], Attribute="userData").get("UserData", {}).get("Value", "")
                 decoded = base64.b64decode(data).decode("utf-8", errors="ignore").casefold() if data else ""
                 user_data_ok = any(token in decoded for token in ("httpd", "apache", "nginx"))
-                q2 += award("User Data installs a web server", 2) if user_data_ok else fail("User Data installs a web server", 2)
+                if user_data_ok:
+                    q2 += award("User Data installs a web server", 2)
+                else:
+                    verified, reason = verify_web_server_inside_instance(
+                        ssm, target_instance["InstanceId"]
+                    )
+                    if verified:
+                        q2 += award(
+                            "Web server active (User Data unreadable)", 2
+                        )
+                    else:
+                        q2 += fail(
+                            "User Data installs a web server",
+                            2,
+                            f"No web-server command found; fallback failed: {reason}",
+                        )
             except (ClientError, ValueError) as exc:
                 verified, reason = verify_web_server_inside_instance(
                     ssm, target_instance["InstanceId"]
